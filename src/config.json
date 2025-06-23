@@ -1,0 +1,6 @@
+{
+  "dbName": "melodies.sqlite",
+  "dbFolder": ".",
+  "storageFolder": "storage",
+  "env": "development"
+}
