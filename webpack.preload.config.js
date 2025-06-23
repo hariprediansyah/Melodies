@@ -4,7 +4,7 @@ module.exports = {
   target: 'electron-preload',
   entry: './src/preload.js',
   output: {
-    path: path.resolve(__dirname, 'dist'),
+    path: path.resolve(__dirname, 'src', 'dist'),
     filename: 'preload.bundle.js'
   },
   externals: {

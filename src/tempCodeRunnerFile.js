@@ -1,0 +1,1 @@
+ path.dirname(process.execPath)

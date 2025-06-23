@@ -1,38 +1,27 @@
-import React from 'react'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import Util from './Util'
 
-function CoverImage({ id, title, className = '' }) {
-  const [imagePath, setImagePath] = useState('')
+export const CoverImage = ({ id, title }) => {
+  const [imageSrc, setImageSrc] = useState(null)
 
   useEffect(() => {
-    const loadImage = async () => {
-      try {
-        if (window.electronAPI) {
-          const path = await window.electronAPI.getCoverImagePath(id)
-          setImagePath(path)
-        } else {
-          // Fallback untuk development di browser
-          setImagePath(`/storage/${id}/cover.jpg`)
-        }
-      } catch (error) {
-        console.error('Error loading cover image:', error)
-        setImagePath('./storage/default_cover.jpg')
-      }
-    }
+    let isMounted = true
+    Util.getCoverImagePath(id).then((path) => {
+      if (isMounted) setImageSrc(path)
+    })
 
-    loadImage()
+    return () => {
+      isMounted = false
+    }
   }, [id])
 
-  return (
-    <img
-      src={imagePath}
-      alt={title || 'Cover Image'}
-      className={`object-cover ${className}`}
-      onError={(e) => {
-        e.target.src = '/storage/default_cover.jpg'
-      }}
-    />
-  )
+  return <img src={imageSrc || 'default_cover.jpg'} alt={title} className='object-cover w-full h-full' />
 }
 
-export default CoverImage
+export function ImageCarousel({ filename }) {
+  const [filePath, setFilePath] = useState(null)
+  useEffect(() => {
+    Util.getCarouselPath(filename).then((path) => setFilePath(path))
+  }, [])
+  return <img src={filePath} alt='carousel' className='w-full h-full object-cover' />
+}

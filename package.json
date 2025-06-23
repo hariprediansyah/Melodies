@@ -4,12 +4,13 @@
   "main": "src/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "cross-env NODE_ENV=development electron .",
+    "start": "webpack --config webpack.preload.config.js && cross-env NODE_ENV=development electron .",
     "build:css": "tailwindcss -i ./style.css -o ./public/output.css --watch",
     "build:react": "webpack --mode development --watch",
+    "build:react-prod": "webpack --mode production",
     "build:preload": "webpack --config webpack.preload.config.js",
     "dev": "concurrently \"npm run build:css\" \"npm run build:react\"",
-    "build": "npm run build:preload && npm run build:react && electron-builder"
+    "build": "npm run build:preload && npm run build:react-prod && electron-builder"
   },
   "keywords": [],
   "author": "",
@@ -27,12 +28,12 @@
       "package.json"
     ],
     "win": {
-      "target": "nsis",
-      "icon": "icon.ico"
+      "target": "portable",
+      "icon": "./icon.ico"
     },
     "extraFiles": [
       {
-        "from": "../dist/preload.bundle.js",
+        "from": "./src/dist/preload.bundle.js",
         "to": "preload.bundle.js"
       }
     ]
@@ -63,6 +64,8 @@
     "webpack-node-externals": "^3.0.0"
   },
   "dependencies": {
+    "lowdb": "^7.0.1",
+    "lucide-react": "^0.522.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-slick": "^0.30.3",

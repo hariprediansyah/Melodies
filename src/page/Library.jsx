@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import initSqlJs from 'sql.js'
 import Util from '../Util'
+import { CoverImage } from '../Components'
 
 export default function Library({ onHome }) {
   const [recentlyAdded, setRecentlyAdded] = useState([])
@@ -11,27 +12,17 @@ export default function Library({ onHome }) {
   }, [])
 
   async function loadData() {
-    // await Util.seedDb()
+    const songs = await window.electronAPI.getData('songs')
+    console.log('songs', songs)
 
-    const dbInstance = await Util.getDb()
-    const listSong = dbInstance.exec('SELECT * FROM songs')
-    const recentlyAdded = dbInstance.exec('SELECT * FROM songs ORDER BY id DESC LIMIT 5')
-    setAllSongs(Util.convertSqlJsResult(listSong))
-    console.log(listSong)
-
-    setRecentlyAdded(Util.convertSqlJsResult(recentlyAdded))
+    setAllSongs(songs)
+    const recentlyAdded = songs.sort((a, b) => new Date(b.timeInput) - new Date(a.timeInput)).slice(0, 5)
+    setRecentlyAdded(recentlyAdded)
   }
 
   // Fungsi untuk menambah lagu ke playlist
   const handleAddToPlaylist = async (song) => {
-    const dbInstance = await Util.getDb()
-    dbInstance.run('INSERT INTO playlist (id_song, title, artist, time) VALUES (?, ?, ?, ?);', [
-      song.id,
-      song.title,
-      song.artist,
-      song.time
-    ])
-    Util.saveDb(dbInstance)
+    await Util.addToPlaylist(song)
     alert(`Lagu '${song.title}' berhasil ditambahkan ke playlist!`)
   }
 
@@ -45,7 +36,7 @@ export default function Library({ onHome }) {
         {recentlyAdded.map((item, idx) => (
           <div key={idx} className='bg-[#23232b] rounded-lg p-2 flex-shrink-0'>
             <div className=' w-full bg-gray-700 rounded mb-2 overflow-hidden flex items-center justify-center'>
-              <img src={Util.imageCover(item.id)} alt={item.title} className='object-cover w-full h-full' />
+              <CoverImage id={item.id} title={item.title} />
             </div>
             <div className='text-white font-semibold text-base truncate'>{item.title}</div>
             <div className='text-gray-400 text-sm truncate'>{item.artist}</div>
@@ -73,7 +64,7 @@ export default function Library({ onHome }) {
                 <td className='py-2 px-2 font-bold align-middle'>{idx + 1}</td>
                 <td className='py-2 px-2 flex items-center gap-5 align-middle'>
                   <span className='w-12 h-12 bg-gray-700 rounded overflow-hidden flex items-center justify-center'>
-                    <img src={Util.imageCover(song.id)} alt={song.title} className='object-cover w-full h-full' />
+                    <CoverImage id={song.id} title={song.title} />
                   </span>
                   <div>
                     <div className='font-semibold'>{song.title}</div>
