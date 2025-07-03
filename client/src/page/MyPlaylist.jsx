@@ -14,7 +14,7 @@ const MyPlaylist = ({ onHome, onLibrary, masterVolume, musicVolume, micVolume })
   }, [])
 
   async function getData() {
-    const listData = await window.electronAPI.getData('playlist')
+    const listData = await window.electronAPI.getPlaylist()
     const listSongs = await window.electronAPI.getData('songs')
     setPlaylist(listData)
     const firstSong = listData.length > 0 ? listData[0] : listSongs[0]
@@ -121,13 +121,25 @@ const MyPlaylist = ({ onHome, onLibrary, masterVolume, musicVolume, micVolume })
           {recomended.map((item, idx) => (
             <div
               key={idx}
-              className='bg-[#23232b] rounded-xl p-2 flex-shrink-0 cursor-pointer hover:bg-[#343434]'
+              className='bg-[#23232b] rounded-xl p-2 flex-shrink-0 cursor-pointer hover:bg-[#343434] group'
               onClick={async () => {
                 await Util.addToPlaylist(item)
                 getData()
               }}>
-              <div className='w-full bg-gray-700 rounded-xl mb-2 overflow-hidden flex items-center justify-center'>
+              <div className='w-full bg-gray-700 rounded-xl mb-2 overflow-hidden flex items-center justify-center h-40 relative'>
                 <CoverImage id={item.id} title={item.title} />
+                <div className='absolute inset-0 flex flex-col items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity'>
+                  <svg
+                    xmlns='http://www.w3.org/2000/svg'
+                    className='w-10 h-10 mb-2 text-white'
+                    fill='none'
+                    viewBox='0 0 24 24'
+                    stroke='currentColor'
+                    strokeWidth='2'>
+                    <path strokeLinecap='round' strokeLinejoin='round' d='M12 4v16m8-8H4' />
+                  </svg>
+                  <span className='text-white font-bold text-lg'>Add to Playlist</span>
+                </div>
               </div>
               <div className='text-white font-semibold text-base truncate'>{item.title}</div>
               <div className='text-gray-400 text-sm truncate'>{item.artist}</div>

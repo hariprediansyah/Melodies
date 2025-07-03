@@ -1,0 +1,1 @@
+(()=>{var r={288:r=>{"use strict";r.exports=require("electron")}},e={};const{contextBridge:t}=function t(o){var s=e[o];if(void 0!==s)return s.exports;var n=e[o]={exports:{}};return r[o](n,n.exports,t),n.exports}(288);t.exposeInMainWorld("apiConfig",{baseURL:"http://localhost:4000"})})();

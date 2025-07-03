@@ -1,3 +1,5 @@
+import { useState, useRef } from 'react'
+
 class Util {
   static async seedDb() {
     try {
@@ -62,6 +64,29 @@ class Util {
 
     return returnPath
   }
+}
+
+let notifId = 0
+export function useNotifStack() {
+  const [notifs, setNotifs] = useState([])
+  const timeoutRefs = useRef({})
+
+  const showNotif = (msg, notifType = 'success') => {
+    const id = ++notifId
+    setNotifs((prev) => [...prev, { id, show: true, message: msg, type: notifType }])
+    timeoutRefs.current[id] = setTimeout(() => {
+      setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, show: false } : n)))
+      setTimeout(() => setNotifs((prev) => prev.filter((n) => n.id !== id)), 500)
+    }, 2000)
+  }
+
+  const onClose = (id) => {
+    setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, show: false } : n)))
+    setTimeout(() => setNotifs((prev) => prev.filter((n) => n.id !== id)), 500)
+    if (timeoutRefs.current[id]) clearTimeout(timeoutRefs.current[id])
+  }
+
+  return { notifs, showNotif, onClose }
 }
 
 export default Util

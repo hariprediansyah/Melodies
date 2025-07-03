@@ -1,0 +1,13 @@
+{
+  "name": "melodies-service",
+  "version": "1.0.0",
+  "description": "Background service for Melodies",
+  "main": "mac_scanner.js",
+  "scripts": {
+    "start": "node mac_scanner.js"
+  },
+  "dependencies": {
+    "mysql2": "^2.3.3",
+    "node-arp": "^1.0.6"
+  }
+}

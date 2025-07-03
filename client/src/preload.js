@@ -16,5 +16,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setSystemVolume: (value) => ipcRenderer.invoke('set-system-volume', value),
   getSystemVolume: () => ipcRenderer.invoke('get-system-volume'),
   setMicVolume: (value) => ipcRenderer.invoke('set-mic-volume', value),
-  getMicVolume: () => ipcRenderer.invoke('get-mic-volume')
+  getMicVolume: () => ipcRenderer.invoke('get-mic-volume'),
+  getPlaylist: () => ipcRenderer.invoke('getPlaylist')
 })

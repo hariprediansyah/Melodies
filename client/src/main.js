@@ -1,22 +1,217 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
 const fs = require('fs')
-const { Low } = require('lowdb')
-const { JSONFileSync } = require('lowdb/node')
 const loudness = require('loudness')
 const { speaker, microphone } = require('win-audio')
+const Database = require('better-sqlite3')
 
-const dbPath = path.join(__dirname, '..', 'storage', 'database.json')
-const adapter = new JSONFileSync(dbPath)
-const db = new Low(adapter, { songs: [], playlist: [], carousels: [] })
+// Helper untuk path storage agar selalu relatif ke lokasi .exe
+function getAppBasePath() {
+  // Saat development: __dirname (src)
+  // Saat production: path ke folder .exe
+  if (process.env.NODE_ENV === 'development') {
+    return path.join(__dirname, '..')
+  } else {
+    return process.cwd()
+  }
+}
 
-console.log(dbPath)
+const basePath = getAppBasePath()
+const dbPath = path.join(basePath, 'storage', 'database.sqlite')
+const db = new Database(dbPath)
+
+// Jika folder storage tidak ada maka buat
+const storageDir = path.join(basePath, 'storage')
+if (!fs.existsSync(storageDir)) {
+  fs.mkdirSync(storageDir, { recursive: true })
+}
+
+// Inisialisasi tabel jika belum ada
+// Songs
+const createSongsTable = `CREATE TABLE IF NOT EXISTS songs (
+  id INTEGER PRIMARY KEY,
+  title TEXT,
+  artist TEXT,
+  genre TEXT,
+  album TEXT,
+  release_date TEXT,
+  duration TEXT,
+  play_count INTEGER,
+  created_at TEXT,
+  updated_at TEXT
+)`
+db.prepare(createSongsTable).run()
+// Playlist
+const createPlaylistTable = `CREATE TABLE IF NOT EXISTS playlist (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  song_id INTEGER
+)`
+db.prepare(createPlaylistTable).run()
+// Carousels
+const createCarouselsTable = `CREATE TABLE IF NOT EXISTS carousels (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT,
+  description TEXT
+)`
+db.prepare(createCarouselsTable).run()
+// Banner
+const createBannersTable = `CREATE TABLE IF NOT EXISTS banners (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT,
+  description TEXT,
+  created_at TEXT,
+  updated_at TEXT
+)`
+db.prepare(createBannersTable).run()
+
+// Fungsi utilitas untuk CRUD
+function getAll(table) {
+  return db.prepare(`SELECT * FROM ${table}`).all()
+}
+function addToPlaylist(song) {
+  db.prepare('INSERT INTO playlist (song_id) VALUES (?)').run(song.id)
+}
+function truncatePlaylist() {
+  db.prepare('DELETE FROM playlist').run()
+}
+function removeFromPlaylist(id) {
+  db.prepare('DELETE FROM playlist WHERE song_id = ?').run(id)
+}
+function seedSongs() {
+  const count = db.prepare('SELECT COUNT(*) as cnt FROM songs').get().cnt
+  if (count > 0) return
+  const insert = db.prepare(
+    'INSERT INTO songs (id, title, artist, genre, album, release_date, duration, play_count, created_at, updated_at) VALUES (@id, @title, @artist, @genre, @album, @release_date, @duration, @play_count, @created_at, @updated_at)'
+  )
+  const songs = [
+    {
+      id: 1,
+      title: 'Sorfcore',
+      artist: 'The neighbourhood',
+      genre: 'Indie',
+      album: 'Hard to Imagine the Neighbourhood Ever Changing',
+      release_date: '2015-10-02',
+      duration: '3:26',
+      play_count: 234,
+      created_at: '2023-11-04T14:30:00',
+      updated_at: '2023-11-04T14:30:00'
+    },
+    {
+      id: 2,
+      title: 'Skyfall Beats',
+      artist: 'nightmares',
+      genre: 'Electronic',
+      album: 'nightmares',
+      release_date: '2020-11-12',
+      duration: '2:45',
+      play_count: 100,
+      created_at: '2023-10-26T16:15:00',
+      updated_at: '2023-10-26T16:15:00'
+    },
+    {
+      id: 3,
+      title: 'Greedy',
+      artist: 'tate mcrae',
+      genre: 'Pop',
+      album: 'Greedy',
+      release_date: '2022-05-20',
+      duration: '2:11',
+      play_count: 50,
+      created_at: '2023-12-30T18:00:00',
+      updated_at: '2023-12-30T18:00:00'
+    },
+    {
+      id: 4,
+      title: 'Lovin On me',
+      artist: 'jack harlow',
+      genre: 'Indie',
+      album: 'Lovin On me',
+      release_date: '2022-08-26',
+      duration: '2:18',
+      play_count: 200,
+      created_at: '2023-12-30T19:30:00',
+      updated_at: '2023-12-30T19:30:00'
+    },
+    {
+      id: 5,
+      title: 'pain the town red',
+      artist: 'Doja Cat',
+      genre: 'Pop',
+      album: 'Paint The Town Red',
+      release_date: '2022-09-23',
+      duration: '3:51',
+      play_count: 150,
+      created_at: '2023-12-29T20:00:00',
+      updated_at: '2023-12-29T20:00:00'
+    },
+    {
+      id: 6,
+      title: 'The Lonliest',
+      artist: 'Måneskin',
+      genre: 'Rock',
+      album: 'The Lonliest',
+      release_date: '2022-10-07',
+      duration: '3:26',
+      play_count: 300,
+      created_at: '2023-12-30T21:00:00',
+      updated_at: '2023-12-30T21:00:00'
+    },
+    {
+      id: 7,
+      title: 'Someone like you',
+      artist: 'Adele',
+      genre: 'Pop',
+      album: '21',
+      release_date: '2011-01-24',
+      duration: '4:45',
+      play_count: 500,
+      created_at: '2023-12-30T22:00:00',
+      updated_at: '2023-12-30T22:00:00'
+    },
+    {
+      id: 8,
+      title: "I Heard That You're Settled Down",
+      artist: 'Unknown Artist',
+      genre: 'Rock',
+      album: 'Unknown Album',
+      release_date: '2015-05-12',
+      duration: '3:17',
+      play_count: 100,
+      created_at: '2023-12-30T23:30:00',
+      updated_at: '2023-12-30T23:30:00'
+    }
+  ]
+  for (const song of songs) insert.run(song)
+}
+
+function seedCarousels() {
+  const count = db.prepare('SELECT COUNT(*) as cnt FROM carousels').get().cnt
+  if (count > 0) return
+  const insert = db.prepare('INSERT INTO carousels (title, description) VALUES (@title, @description)')
+  const carousels = [
+    {
+      title: 'Sing Your Heart Out.\nThe Ultimate Karaoke Collection!',
+      description:
+        'Discover our karaoke app, where you can dive into a fantastic library of both classic hits and the latest chart-toppers. Sing along to your favorite songs in stunning quality, all while enjoying a seamless experience. No matter your musical preference, we have the perfect tracks to get you singing!'
+    },
+    {
+      title: 'Koleksi Lagu Terbaru',
+      description: 'Nikmati update lagu-lagu terbaru setiap minggu, langsung dari chart dunia!'
+    },
+    {
+      title: 'Karaoke Kualitas Tinggi',
+      description: 'Audio jernih dan lirik realtime, pengalaman karaoke terbaik untuk semua usia.'
+    },
+    {
+      title: 'Buat Playlist Favoritmu',
+      description: 'Susun dan simpan lagu favoritmu, siap dinyanyikan kapan saja!'
+    }
+  ]
+  for (const carousel of carousels) insert.run(carousel)
+}
 
 // Ensure DB file and structure
 fs.mkdirSync(path.dirname(dbPath), { recursive: true })
-db.read()
-// db.data ||= { songs: [], playlist: [], carousels: [] }
-// db.write()
 
 // YouTube TV User Agent
 const youtubeTVUserAgent =
@@ -119,161 +314,33 @@ function createWindow() {
 }
 
 ipcMain.handle('getData', (_, collection) => {
-  return db.data[collection] || []
+  return getAll(collection)
 })
 
 ipcMain.handle('addToPlaylist', (_, song) => {
-  db.data.playlist.push(song)
-  db.write()
+  addToPlaylist(song)
 })
 
 ipcMain.handle('truncateDb', () => {
-  db.data.playlist = []
-  db.write()
+  truncatePlaylist()
 })
 
 ipcMain.handle('remove-from-playlist', async (_, id) => {
-  db.data.playlist = db.data.playlist.filter((song) => song.id !== id)
-  await db.write()
+  removeFromPlaylist(id)
   return true
 })
 
 ipcMain.handle('seedDb', () => {
-  if (db.data.songs.length > 0) return
-  db.data.songs = [
-    {
-      id: 1,
-      title: 'Sorfcore',
-      artist: 'The neighbourhood',
-      album: 'Hard to Imagine the Neighbourhood Ever Changing',
-      time: '3:26',
-      genre: 'Indie',
-      release_date: '2015-10-02',
-      play_count: 234,
-      time_input: '2023-11-04T14:30:00'
-    },
-    {
-      id: 2,
-      title: 'Skyfall Beats',
-      artist: 'nightmares',
-      album: 'nightmares',
-      time: '2:45',
-      genre: 'Electronic',
-      release_date: '2020-11-12',
-      play_count: 100,
-      time_input: '2023-10-26T16:15:00'
-    },
-    {
-      id: 3,
-      title: 'Greedy',
-      artist: 'tate mcrae',
-      img: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb',
-      date: 'Dec 30, 2023',
-      album: 'Greedy',
-      time: '2:11',
-      timeInput: '2023-12-30T18:00:00',
-      viewCount: 50,
-      genre: 'Pop',
-      releaseDate: '2022-05-20'
-    },
-    {
-      id: 4,
-      title: 'Lovin On me',
-      artist: 'jack harlow',
-      img: 'https://images.unsplash.com/photo-1515378791036-0648a3ef77b2',
-      date: 'Dec 30, 2023',
-      album: 'Lovin On me',
-      time: '2:18',
-      timeInput: '2023-12-30T19:30:00',
-      viewCount: 200,
-      genre: 'Indie',
-      releaseDate: '2022-08-26'
-    },
-    {
-      id: 5,
-      title: 'pain the town red',
-      artist: 'Doja Cat',
-      img: 'https://images.unsplash.com/photo-1465101178521-c3a6088ed0c4',
-      date: 'Dec 29, 2023',
-      album: 'Paint The Town Red',
-      time: '3:51',
-      timeInput: '2023-12-29T20:00:00',
-      viewCount: 150,
-      genre: 'Pop',
-      releaseDate: '2022-09-23'
-    },
-    {
-      id: 6,
-      title: 'The Lonliest',
-      artist: 'Måneskin',
-      img: 'https://plus.unsplash.com/premium_photo-1747562250727-56bfad4a9798',
-      date: 'Dec 30, 2023',
-      album: 'The Lonliest',
-      time: '3:26',
-      timeInput: '2023-12-30T21:00:00',
-      viewCount: 300,
-      genre: 'Rock',
-      releaseDate: '2022-10-07'
-    },
-    {
-      id: 7,
-      title: 'Someone like you',
-      artist: 'Adele',
-      img: 'https://i.imgur.com/1.jpg',
-      date: 'Dec 30, 2023',
-      album: '21',
-      time: '4:45',
-      timeInput: '2023-12-30T22:00:00',
-      viewCount: 500,
-      genre: 'Pop',
-      releaseDate: '2011-01-24'
-    },
-    {
-      id: 8,
-      title: "I Heard That You're Settled Down",
-      artist: 'Unknown Artist',
-      img: 'https://i.imgur.com/2.jpg',
-      date: 'Dec 30, 2023',
-      album: 'Unknown Album',
-      time: '3:17',
-      timeInput: '2023-12-30T23:30:00',
-      viewCount: 100,
-      genre: 'Rock',
-      releaseDate: '2015-05-12'
-    }
-  ]
-  db.data.carousels = [
-    {
-      id: 1,
-      title: 'Sing Your Heart Out.\nThe Ultimate Karaoke Collection!',
-      description:
-        'Discover our karaoke app, where you can dive into a fantastic library of both classic hits and the latest chart-toppers. Sing along to your favorite songs in stunning quality, all while enjoying a seamless experience. No matter your musical preference, we have the perfect tracks to get you singing!',
-      filename: 'photo-1511671782779-c97d3d27a1d4.jpeg'
-    },
-    {
-      id: 2,
-      title: 'Koleksi Lagu Terbaru',
-      description: 'Nikmati update lagu-lagu terbaru setiap minggu, langsung dari chart dunia!',
-      filename: 'photo-1470225620780-dba8ba36b745.jpeg'
-    },
-    {
-      id: 3,
-      title: 'Karaoke Kualitas Tinggi',
-      description: 'Audio jernih dan lirik realtime, pengalaman karaoke terbaik untuk semua usia.',
-      filename: 'photo-1466428996289-fb355538da1b.jpeg'
-    },
-    {
-      id: 4,
-      title: 'Buat Playlist Favoritmu',
-      description: 'Susun dan simpan lagu favoritmu, siap dinyanyikan kapan saja!',
-      filename: '1.jpeg'
-    }
-  ]
-  db.write()
+  seedSongs()
+  seedCarousels()
+})
+
+ipcMain.handle('getPlaylist', () => {
+  return db.prepare('SELECT B.* FROM playlist A inner join songs B on A.song_id = B.id').all()
 })
 
 ipcMain.handle('getStorageBaseDir', () => {
-  return path.resolve(__dirname, '..', 'storage')
+  return path.resolve(basePath, 'storage')
 })
 
 ipcMain.handle('fileExists', (_, filePath) => {

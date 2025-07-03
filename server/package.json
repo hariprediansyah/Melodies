@@ -1,0 +1,30 @@
+{
+  "name": "melodies-server",
+  "version": "1.0.0",
+  "description": "Server untuk sistem manajemen karaoke Melodies",
+  "main": "index.js",
+  "scripts": {
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "backend": "cd backend && npm start",
+    "backend:dev": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm start",
+    "frontend:electron": "cd frontend && npm run electron",
+    "dev": "concurrently \"npm run backend:dev\" \"npm run frontend\"",
+    "start": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "build": "cd frontend && npm run build",
+    "setup-db": "cd backend && mysql -u root -p < setup_database.sql"
+  },
+  "keywords": [
+    "melodies",
+    "karaoke",
+    "admin",
+    "panel",
+    "backend",
+    "frontend"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

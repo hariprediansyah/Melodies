@@ -50,7 +50,7 @@ export default function Home({ onLibrary, onPlaylist, onYoutube }) {
             <Slider {...settings} slickGoTo={idx}>
               {carouselData.map((item, i) => (
                 <div key={i} className='w-full h-full'>
-                  <ImageCarousel filename={item.filename} />
+                  <ImageCarousel filename={item.id + '.jpg'} />
                 </div>
               ))}
             </Slider>

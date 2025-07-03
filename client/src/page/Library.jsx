@@ -1,11 +1,14 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import initSqlJs from 'sql.js'
 import Util from '../Util'
-import { CoverImage } from '../Components'
+import { CoverImage, NotifStack } from '../Components'
+import { useNotifStack } from '../Util'
 
 export default function Library({ onHome }) {
   const [recentlyAdded, setRecentlyAdded] = useState([])
   const [allSongs, setAllSongs] = useState([])
+  const [playlist, setPlaylist] = useState([])
+  const notif = useNotifStack()
 
   useEffect(() => {
     loadData()
@@ -13,17 +16,27 @@ export default function Library({ onHome }) {
 
   async function loadData() {
     const songs = await window.electronAPI.getData('songs')
-    console.log('songs', songs)
-
+    const playlistData = await window.electronAPI.getPlaylist()
     setAllSongs(songs)
-    const recentlyAdded = songs.sort((a, b) => new Date(b.timeInput) - new Date(a.timeInput)).slice(0, 5)
+    setPlaylist(playlistData)
+    const playlistIds = playlistData.map((song) => song.id)
+    const recentlyAdded = songs
+      .filter((song) => !playlistIds.includes(song.id))
+      .sort((a, b) => new Date(b.created_at || b.timeInput) - new Date(a.created_at || a.timeInput))
+      .slice(0, 5)
     setRecentlyAdded(recentlyAdded)
   }
 
   // Fungsi untuk menambah lagu ke playlist
   const handleAddToPlaylist = async (song) => {
-    await Util.addToPlaylist(song)
-    alert(`Lagu '${song.title}' berhasil ditambahkan ke playlist!`)
+    const alreadyInPlaylist = playlist.some((s) => s.id === song.id)
+    if (alreadyInPlaylist) {
+      notif.showNotif('Telah ditambahkan ke playlist', 'info')
+    } else {
+      await Util.addToPlaylist(song)
+      notif.showNotif(`Lagu '${song.title}' berhasil ditambahkan ke playlist!`, 'success')
+      setPlaylist((prev) => [...prev, song])
+    }
   }
 
   return (
@@ -34,9 +47,23 @@ export default function Library({ onHome }) {
       <h2 className='text-2xl font-semibold mb-4'>Recently Added</h2>
       <div className='grid grid-cols-5 gap-6'>
         {recentlyAdded.map((item, idx) => (
-          <div key={idx} className='bg-[#23232b] rounded-xl p-2 flex-shrink-0'>
-            <div className=' w-full bg-gray-700 rounded-xl mb-2 overflow-hidden flex items-center justify-center'>
+          <div key={idx} className='bg-[#23232b] rounded-xl p-2 flex-shrink-0 group'>
+            <div className='w-full bg-gray-700 rounded-xl mb-2 overflow-hidden flex items-center justify-center h-40 relative'>
               <CoverImage id={item.id} title={item.title} />
+              <div
+                className='absolute inset-0 flex flex-col items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer'
+                onClick={() => handleAddToPlaylist(item)}>
+                <svg
+                  xmlns='http://www.w3.org/2000/svg'
+                  className='w-10 h-10 mb-2 text-white'
+                  fill='none'
+                  viewBox='0 0 24 24'
+                  stroke='currentColor'
+                  strokeWidth='2'>
+                  <path strokeLinecap='round' strokeLinejoin='round' d='M12 4v16m8-8H4' />
+                </svg>
+                <span className='text-white font-bold text-lg'>Add to Playlist</span>
+              </div>
             </div>
             <div className='text-white font-semibold text-base truncate'>{item.title}</div>
             <div className='text-gray-400 text-sm truncate'>{item.artist}</div>
@@ -92,6 +119,8 @@ export default function Library({ onHome }) {
           </tbody>
         </table>
       </div>
+      {/* Notifikasi Popup */}
+      <NotifStack notifs={notif.notifs} onClose={notif.onClose} />
     </div>
   )
 }
