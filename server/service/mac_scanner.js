@@ -1,7 +1,9 @@
 const mysql = require('mysql2/promise')
 const { exec } = require('child_process')
+const os = require('os')
 const util = require('util')
 const execAsync = util.promisify(exec)
+const axios = require('axios')
 
 const pool = mysql.createPool({
   host: 'localhost',
@@ -21,6 +23,14 @@ async function getRooms() {
 async function updateRoomIP(id, ip) {
   await pool.query('UPDATE rooms SET ip_address = ? WHERE id = ?', [ip, id])
   console.log(`Updated room ${id} with IP ${ip}`)
+  // Kirim update ke client
+  const serverIp = getServerIp()
+  try {
+    await axios.post(`http://${ip}:5771/updateserver`, { server_ip: serverIp }, { timeout: 2000 })
+    console.log(`Berhasil update server_ip ke client ${ip}`)
+  } catch (err) {
+    console.log(`Gagal update server_ip ke client ${ip}: ${err.message}`)
+  }
 }
 
 async function getIPFromMAC(targetMAC) {
@@ -44,6 +54,25 @@ async function getIPFromMAC(targetMAC) {
   }
 }
 
+// Fungsi untuk mendapatkan subnet dari IP lokal
+function getLocalSubnet() {
+  const interfaces = os.networkInterfaces()
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // Hanya IPv4 dan bukan internal (bukan 127.0.0.1)
+      if (iface.family === 'IPv4' && !iface.internal) {
+        // Contoh: 192.168.1.23 -> 192.168.1
+        const parts = iface.address.split('.')
+        if (parts.length === 4) {
+          return `${parts[0]}.${parts[1]}.${parts[2]}`
+        }
+      }
+    }
+  }
+  // Default fallback
+  return '192.168.1'
+}
+
 async function pingSubnet(subnet) {
   const pingPromises = []
   for (let i = 1; i <= 254; i++) {
@@ -56,13 +85,26 @@ async function pingSubnet(subnet) {
   await Promise.all(pingPromises)
 }
 
+// Fungsi untuk mendapatkan IP address server sendiri
+function getServerIp() {
+  const interfaces = os.networkInterfaces()
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address
+      }
+    }
+  }
+  return '127.0.0.1'
+}
+
 async function main() {
   console.log('Starting MAC address scan service...')
 
   setInterval(async () => {
     try {
-      const subnet = '192.168.1' // Ganti dengan subnet kamu
-      console.log('Pinging subnet...')
+      const subnet = getLocalSubnet()
+      console.log('Pinging subnet:', subnet)
       await pingSubnet(subnet)
 
       const rooms = await getRooms()
@@ -71,13 +113,13 @@ async function main() {
         if (ip) {
           await updateRoomIP(room.id, ip)
         } else {
-          console.log(`IP for MAC ${room.mac_address} not found`)
+          console.log(`IP untuk MAC ${room.mac_address} tidak ditemukan`)
         }
       }
     } catch (error) {
-      console.error('An error occurred during the scan:', error)
+      console.error('Terjadi error saat scan:', error)
     }
-  }, 10000) // Scan setiap 60 detik
+  }, 10000) // Scan setiap 10 detik
 }
 
 main()

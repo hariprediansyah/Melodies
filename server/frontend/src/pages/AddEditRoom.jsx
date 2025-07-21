@@ -4,7 +4,7 @@ import { InputField } from '../components/Components'
 
 export default function AddEditRoom({ mode, roomId, onBack }) {
   const isEdit = mode === 'edit'
-  const [form, setForm] = useState({ name: '', description: '', status: 'Active', mac_address: '' })
+  const [form, setForm] = useState({ name: '', description: '', status: 'Active', macAddress: '' })
   const [loading, setLoading] = useState(isEdit)
   const [submitting, setSubmitting] = useState(false)
 
@@ -13,12 +13,14 @@ export default function AddEditRoom({ mode, roomId, onBack }) {
       setLoading(true)
       roomAPI.getAll().then((rooms) => {
         const room = rooms.find((r) => r.id === roomId)
+        console.log(room)
+
         if (room) {
           setForm({
             name: room.name,
             description: room.description,
             status: room.status,
-            mac_address: room.mac_address || ''
+            macAddress: room.macAddress || ''
           })
         }
         setLoading(false)
@@ -79,8 +81,8 @@ export default function AddEditRoom({ mode, roomId, onBack }) {
           />
           <InputField
             label='MAC Address'
-            name='mac_address'
-            value={form.mac_address}
+            name='macAddress'
+            value={form.macAddress}
             onChange={handleChange}
             placeholder='Enter MAC Address'
           />

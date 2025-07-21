@@ -63,7 +63,7 @@ export default function ContentBanner({ onAdd, onEdit }) {
     if (col.key === 'image') {
       // Coba beberapa ekstensi umum
       const now = Date.now()
-      const imgSrc = `http://localhost:4000/carousels/${banner.id}.jpg?t=${now}`
+      const imgSrc = `http://localhost:4000/banners/${banner.id}.jpg?t=${now}`
       return <img src={imgSrc} alt={banner.title} className='w-24 h-12 object-cover rounded' />
     }
     if (col.key === 'actions')

@@ -1,0 +1,22 @@
+{
+  "name": "client_service",
+  "version": "1.0.0",
+  "main": "sync_service.js",
+  "scripts": {
+    "start": "node sync_service.js",
+    "build": "pkg sync_service.js --targets node20-win-x64 --output sync_service.exe"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "axios": "^0.27.2",
+    "better-sqlite3": "^12.2.0",
+    "express": "^5.1.0"
+  },
+  "pkg": {
+    "targets": [
+      "node16-win-x64"
+    ]
+  }
+}

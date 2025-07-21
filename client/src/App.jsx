@@ -57,12 +57,71 @@ function MicPlayer({ micVolume }) {
   return null
 }
 
+function StandbySlideshow() {
+  const [banners, setBanners] = useState([])
+  const [idx, setIdx] = useState(0)
+  const [prevIdx, setPrevIdx] = useState(0)
+  const [fading, setFading] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+    window.electronAPI.getBannerImages().then((list) => {
+      if (isMounted) setBanners(list)
+    })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (banners.length === 0) return
+    const interval = setInterval(() => {
+      setPrevIdx(idx)
+      setFading(true)
+      setTimeout(() => {
+        setIdx((i) => (i + 1) % banners.length)
+        setFading(false)
+      }, 500) // durasi fade
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [banners, idx])
+
+  if (banners.length === 0) return <div>Loading banners...</div>
+  return (
+    <div className='fixed inset-0 flex items-center justify-center bg-black'>
+      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', width: '100vw', height: '100vh' }}>
+        {/* Gambar baru */}
+        <img
+          src={banners[idx]}
+          alt='Standby'
+          className={`w-full h-full object-cover absolute transition-opacity duration-500 ${
+            fading ? 'opacity-0' : 'opacity-100'
+          }`}
+          style={{ left: 0, top: 0 }}
+        />
+        {/* Gambar lama, hanya saat fading */}
+        {fading && (
+          <img
+            src={banners[prevIdx]}
+            alt='Standby-prev'
+            className='w-full h-full object-cover absolute transition-opacity duration-500 opacity-100'
+            style={{ left: 0, top: 0 }}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [page, setPage] = useState('home')
   const [searchKeyword, setSearchKeyword] = useState('')
   const [masterVolume, setMasterVolume] = useState(0.9)
   const [musicVolume, setMusicVolume] = useState(0.9)
   const [micVolume, setMicVolume] = useState(0.9)
+  const [roomStatus, setRoomStatus] = useState('Inactive') // default Active agar menu tampil saat awal
+  const [macAddress, setMacAddress] = useState('aa')
+  const [serverUrl, setServerUrl] = useState('http://localhost:4000')
 
   // Load setting dari localStorage dan sistem saat mount
   useEffect(() => {
@@ -82,6 +141,18 @@ export default function App() {
     if (window.electronAPI?.getMicVolume) {
       window.electronAPI.getMicVolume().then((v) => {
         if (typeof v === 'number') setMicVolume(v)
+      })
+    }
+    if (window.electronAPI?.getMac) {
+      window.electronAPI.getMac().then((mac) => {
+        console.log(mac)
+        // setMacAddress(mac)
+      })
+    }
+    // Gunakan window.deviceInfo.getServerUrl()
+    if (window.electronAPI?.getServerUrl) {
+      window.electronAPI.getServerUrl().then((url) => {
+        setServerUrl(url)
       })
     }
   }, [])
@@ -110,6 +181,41 @@ export default function App() {
     }
   }, [micVolume])
 
+  // Polling status room
+  useEffect(() => {
+    let polling = null
+    const fetchStatus = async () => {
+      try {
+        const data = await window.electronAPI.getRoomStatusByMac()
+        console.log(data)
+        if (data.status == 'Inactive') {
+          window.electronAPI.updateRoomStatusByMac('Standby')
+        }
+
+        setRoomStatus(data.status)
+      } catch {
+        setRoomStatus('Inactive')
+      }
+    }
+    fetchStatus()
+    polling = setInterval(fetchStatus, 3000)
+    return () => clearInterval(polling)
+  }, [])
+
+  // // Update status ke Standby saat start
+  // useEffect(() => {
+  //   window.electronAPI.updateRoomStatusByMac('Standby')
+  // }, [])
+
+  // Update status ke Inactive saat close
+  // useEffect(() => {
+  //   const handleBeforeUnload = () => {
+  //     window.electronAPI.updateRoomStatusByMac('Inactive')
+  //   }
+  //   window.addEventListener('beforeunload', handleBeforeUnload)
+  //   return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  // }, [])
+
   const handleSearch = (keyword) => {
     if (!keyword.trim()) {
       setPage('home')
@@ -130,6 +236,18 @@ export default function App() {
     setTimeout(() => {
       window.electronAPI.injectYoutubeSearch && window.electronAPI.injectYoutubeSearch(searchKeyword)
     }, 1000)
+  }
+
+  // Render loading jika macAddress belum didapat
+  if (!macAddress) {
+    return <div className='flex items-center justify-center h-screen text-2xl'>Loading device info...</div>
+  }
+  // Render sesuai status
+  if (roomStatus === 'Inactive') {
+    return <div className='flex items-center justify-center h-screen text-3xl text-red-500'>Disconnected</div>
+  }
+  if (roomStatus === 'Standby') {
+    return <StandbySlideshow />
   }
 
   return (

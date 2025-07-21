@@ -22,10 +22,11 @@ CREATE TABLE IF NOT EXISTS songs (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
   artist VARCHAR(255),
-  folder VARCHAR(255),
+  genre VARCHAR(255),
   album VARCHAR(255),
   release_date DATE,
   duration VARCHAR(10),
+  format VARCHAR(10),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -42,6 +43,18 @@ CREATE TABLE IF NOT EXISTS banners (
   banner_updated_at TIMESTAMP NULL DEFAULT NULL
 );
 
+-- Tabel room_sessions
+CREATE TABLE IF NOT EXISTS room_sessions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  room_id INT NOT NULL,
+  start_time DATETIME NOT NULL,
+  end_time DATETIME DEFAULT NULL,
+  status ENUM('Active', 'Ended') DEFAULT 'Active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
+);
+
 -- Insert sample data untuk rooms
 INSERT INTO rooms (name, description, status) VALUES
 ('Melody Haven', 'Melody Haven is a serene retreat designed for relaxation and creativity. With soft hues...', 'Active'),
@@ -56,17 +69,17 @@ INSERT INTO rooms (name, description, status) VALUES
 ('Creativity Cove', 'Creativity Cove is a vibrant and inspiring space designed to ignite your imagination. B...', 'Active');
 
 -- Insert sample data untuk songs
-INSERT INTO songs (title, singer, folder, album, release_date, duration) VALUES
-('Bohemian Rhapsody', 'Queen', 'queen_folder', 'A Night at the Opera', '1975-11-21', '5:55'),
-('Hotel California', 'Eagles', 'eagles_folder', 'Hotel California', '1976-12-08', '6:30'),
-('Imagine', 'John Lennon', 'lennon_folder', 'Imagine', '1971-09-09', '3:03'),
-('Stairway to Heaven', 'Led Zeppelin', 'zeppelin_folder', 'Led Zeppelin IV', '1971-11-08', '8:02'),
-('Yesterday', 'The Beatles', 'beatles_folder', 'Help!', '1965-08-06', '2:05'),
-('Wonderwall', 'Oasis', 'oasis_folder', '(What''s the Story) Morning Glory?', '1995-10-30', '4:18'),
-('Creep', 'Radiohead', 'radiohead_folder', 'Pablo Honey', '1992-09-21', '3:58'),
-('Smells Like Teen Spirit', 'Nirvana', 'nirvana_folder', 'Nevermind', '1991-09-10', '5:01'),
-('Sweet Child O'' Mine', 'Guns N'' Roses', 'gnr_folder', 'Appetite for Destruction', '1987-07-21', '5:56'),
-('Nothing Else Matters', 'Metallica', 'metallica_folder', 'Metallica', '1991-08-12', '6:28');
+INSERT INTO songs (title, artist, genre, album, release_date, duration, format) VALUES
+('Bohemian Rhapsody', 'Queen', 'Rock', 'A Night at the Opera', '1975-11-21', '5:55', 'mp4'),
+('Hotel California', 'Eagles', 'Rock', 'Hotel California', '1976-12-08', '6:30', 'mp4'),
+('Imagine', 'John Lennon', 'Pop', 'Imagine', '1971-09-09', '3:03', 'mp4'),
+('Stairway to Heaven', 'Led Zeppelin', 'Rock', 'Led Zeppelin IV', '1971-11-08', '8:02', 'mp4'),
+('Yesterday', 'The Beatles', 'Pop', 'Help!', '1965-08-06', '2:05', 'mp4'),
+('Wonderwall', 'Oasis', 'Rock', '(What''s the Story) Morning Glory?', '1995-10-30', '4:18', 'mp4'),
+('Creep', 'Radiohead', 'Alternative', 'Pablo Honey', '1992-09-21', '3:58', 'mp4'),
+('Smells Like Teen Spirit', 'Nirvana', 'Grunge', 'Nevermind', '1991-09-10', '5:01', 'mp4'),
+('Sweet Child O'' Mine', 'Guns N'' Roses', 'Rock', 'Appetite for Destruction', '1987-07-21', '5:56', 'mp4'),
+('Nothing Else Matters', 'Metallica', 'Metal', 'Metallica', '1991-08-12', '6:28', 'mp4');
 
 -- Insert sample data untuk banners
 INSERT INTO banners (title, image, status, url) VALUES

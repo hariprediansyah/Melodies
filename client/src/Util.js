@@ -27,7 +27,7 @@ class Util {
 
   static async getCarouselPath(filename) {
     const baseDir = await window.electronAPI.getStorageBaseDir()
-    return `file://${baseDir}/carousels/${filename}`
+    return `file://${baseDir}/banners/${filename}`
   }
 
   static async getCoverImagePath(id) {
@@ -37,6 +37,8 @@ class Util {
 
     for (const ext of fileExtensions) {
       const currentPath = `${baseDir}/songs/${id}/cover.${ext}`
+      console.log(currentPath)
+
       if (await window.electronAPI.fileExists(currentPath)) {
         filePath = currentPath
         break

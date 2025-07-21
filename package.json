@@ -1,0 +1,19 @@
+{
+  "name": "melodies",
+  "version": "1.0.0",
+  "description": "Sistem manajemen karaoke lengkap dengan aplikasi client untuk room karaoke dan admin panel untuk pengelolaan.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hariprediansyah/Melodies.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hariprediansyah/Melodies/issues"
+  },
+  "homepage": "https://github.com/hariprediansyah/Melodies#readme"
+}

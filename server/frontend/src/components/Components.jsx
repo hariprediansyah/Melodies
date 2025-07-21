@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useRef } from 'react'
 
 export const GlassCard = ({ className, children }) => {
   return (
@@ -255,4 +255,59 @@ export const BannerForm = ({ initialData = {}, onSubmit, onCancel, loading }) =>
       </form>
     </div>
   )
+}
+
+// Komponen ToastNotif
+export function ToastNotif({ notifs, onClose }) {
+  return (
+    <div className='fixed top-6 right-6 z-50 flex flex-col gap-2'>
+      {notifs.map((notif) => (
+        <div
+          key={notif.id}
+          className={`px-6 py-3 rounded-lg shadow-lg text-white font-semibold flex items-center gap-3 transition-all duration-300 ${
+            notif.type === 'success' ? 'bg-green-600' : notif.type === 'error' ? 'bg-red-600' : 'bg-gray-700'
+          } ${notif.show ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
+          {notif.type === 'success' && (
+            <svg width='22' height='22' fill='none' viewBox='0 0 24 24'>
+              <circle cx='12' cy='12' r='10' stroke='white' strokeWidth='2' />
+              <path d='M8 12.5l3 3 5-5' stroke='white' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
+            </svg>
+          )}
+          {notif.type === 'error' && (
+            <svg width='22' height='22' fill='none' viewBox='0 0 24 24'>
+              <circle cx='12' cy='12' r='10' stroke='white' strokeWidth='2' />
+              <path d='M15 9l-6 6M9 9l6 6' stroke='white' strokeWidth='2' strokeLinecap='round' />
+            </svg>
+          )}
+          <span>{notif.message}</span>
+          <button onClick={() => onClose(notif.id)} className='ml-2 text-white/70 hover:text-white text-lg'>
+            &times;
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Hook notifikasi
+export function useNotifStack() {
+  const [notifs, setNotifs] = useState([])
+  const timeoutRefs = useRef({})
+
+  const showNotif = (msg, notifType = 'success') => {
+    const id = Date.now() + Math.random()
+    setNotifs((prev) => [...prev, { id, show: true, message: msg, type: notifType }])
+    timeoutRefs.current[id] = setTimeout(() => {
+      setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, show: false } : n)))
+      setTimeout(() => setNotifs((prev) => prev.filter((n) => n.id !== id)), 500)
+    }, 2000)
+  }
+
+  const onClose = (id) => {
+    setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, show: false } : n)))
+    setTimeout(() => setNotifs((prev) => prev.filter((n) => n.id !== id)), 500)
+    if (timeoutRefs.current[id]) clearTimeout(timeoutRefs.current[id])
+  }
+
+  return { notifs, showNotif, onClose }
 }

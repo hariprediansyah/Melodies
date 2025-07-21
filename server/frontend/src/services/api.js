@@ -38,6 +38,18 @@ export const roomAPI = {
   delete: (id) =>
     apiCall(`/rooms/${id}`, {
       method: 'DELETE'
+    }),
+  startSession: (id) =>
+    apiCall(`/rooms/${id}/start-session`, {
+      method: 'POST'
+    }),
+  endSession: (id) =>
+    apiCall(`/rooms/${id}/end-session`, {
+      method: 'POST'
+    }),
+  shutdownAll: () =>
+    apiCall('/rooms/shutdown-all', {
+      method: 'POST'
     })
 }
 

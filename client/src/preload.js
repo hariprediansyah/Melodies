@@ -1,6 +1,4 @@
 const { contextBridge, ipcRenderer } = require('electron')
-const fs = require('fs')
-const path = require('path')
 
 contextBridge.exposeInMainWorld('electronAPI', {
   removeFromPlaylist: (id) => ipcRenderer.invoke('remove-from-playlist', id),
@@ -17,5 +15,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSystemVolume: () => ipcRenderer.invoke('get-system-volume'),
   setMicVolume: (value) => ipcRenderer.invoke('set-mic-volume', value),
   getMicVolume: () => ipcRenderer.invoke('get-mic-volume'),
-  getPlaylist: () => ipcRenderer.invoke('getPlaylist')
+  getPlaylist: () => ipcRenderer.invoke('getPlaylist'),
+  getServerUrl: () => ipcRenderer.invoke('getServerUrl'),
+  getMac: () => ipcRenderer.invoke('getMac'),
+  getRoomStatusByMac: () => ipcRenderer.invoke('room-status-by-mac'),
+  updateRoomStatusByMac: (status) => ipcRenderer.invoke('update-room-status-by-mac', status),
+  getBannerImages: () => ipcRenderer.invoke('get-banner-images')
 })

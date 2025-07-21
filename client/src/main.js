@@ -4,6 +4,7 @@ const fs = require('fs')
 const loudness = require('loudness')
 const { speaker, microphone } = require('win-audio')
 const Database = require('better-sqlite3')
+const macaddress = require('macaddress')
 
 // Helper untuk path storage agar selalu relatif ke lokasi .exe
 function getAppBasePath() {
@@ -442,7 +443,108 @@ ipcMain.handle('get-mic-volume', async () => {
   return microphone.get() / 100
 })
 
-app.whenReady().then(createWindow)
+ipcMain.handle('getServerUrl', async () => {
+  try {
+    const row = db.prepare("SELECT value FROM sys_params WHERE key = 'server_ip'").get()
+    if (row && row.value) {
+      let url = row.value
+      if (!/^https?:\/\//.test(url)) url = 'http://' + url
+      return url + ':4000'
+    }
+    return null
+  } catch {
+    return null
+  }
+})
+
+ipcMain.handle('getMac', async () => {
+  return macaddress.all()
+})
+
+ipcMain.handle('room-status-by-mac', async () => {
+  try {
+    const rowIp = db.prepare("SELECT value FROM sys_params WHERE key = 'server_ip'").get()
+    const rowMac = db.prepare("SELECT value FROM sys_params WHERE key = 'client_mac'").get()
+    if (!rowIp || !rowIp.value || !rowMac || !rowMac.value) return { status: 'Inactive' }
+    let url = rowIp.value
+    if (!/^https?:\/\//.test(url)) url = 'http://' + url
+    url = url + '/rooms/by-mac/' + rowMac.value
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    const res = await fetch(url)
+    return res.json()
+
+    if (!res.ok) return { status: 'Inactive' }
+    const data = await res.json()
+    return data
+  } catch (e) {
+    console.log(e)
+
+    return { status: 'Inactive' }
+  }
+})
+
+ipcMain.handle('update-room-status-by-mac', async (_, status) => {
+  try {
+    const rowIp = db.prepare("SELECT value FROM sys_params WHERE key = 'server_ip'").get()
+    const rowMac = db.prepare("SELECT value FROM sys_params WHERE key = 'client_mac'").get()
+    if (!rowIp || !rowIp.value || !rowMac || !rowMac.value) return false
+    let url = rowIp.value
+    if (!/^https?:\/\//.test(url)) url = 'http://' + url
+    url = url + '/rooms/by-mac/' + rowMac.value
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    })
+    return res.ok
+  } catch (e) {
+    return false
+  }
+})
+
+ipcMain.handle('get-banner-images', async () => {
+  try {
+    const bannersDir = path.join(basePath, 'storage', 'banners')
+    const files = fs.readdirSync(bannersDir)
+    const images = files
+      .filter((f) => /\.(jpg|jpeg|png)$/i.test(f))
+      .map((f) => 'file://' + path.join(bannersDir, f).replace(/\\/g, '/'))
+    return images
+  } catch (e) {
+    return []
+  }
+})
+
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+
+async function ensureRoomStandbyIfInactive() {
+  try {
+    const rowIp = db.prepare("SELECT value FROM sys_params WHERE key = 'server_ip'").get()
+    const rowMac = db.prepare("SELECT value FROM sys_params WHERE key = 'client_mac'").get()
+    if (!rowIp || !rowIp.value || !rowMac || !rowMac.value) return
+    let url = rowIp.value
+    if (!/^https?:\/\//.test(url)) url = 'http://' + url
+    url = url + '/rooms/by-mac/' + rowMac.value
+    const res = await fetch(url)
+    if (!res.ok) return
+    const data = await res.json()
+    if (data.status === 'Inactive') {
+      await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Standby' })
+      })
+    }
+  } catch (e) {
+    // silent
+  }
+}
+
+app.whenReady().then(async () => {
+  // await ensureRoomStandbyIfInactive()
+  createWindow()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

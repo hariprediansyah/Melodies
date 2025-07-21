@@ -34,7 +34,7 @@ export default function Home({ onLibrary, onPlaylist, onYoutube }) {
 
   useEffect(() => {
     async function loadData() {
-      const carousels = await window.electronAPI.getData('carousels')
+      const carousels = await window.electronAPI.getData('banners')
       console.log('carousels', carousels)
 
       setCarouselData(carousels)
