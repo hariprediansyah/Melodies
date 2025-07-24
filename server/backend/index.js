@@ -109,7 +109,7 @@ app.get('/rooms/by-mac/:mac', async (req, res) => {
 app.put('/rooms/by-mac/:mac', async (req, res) => {
   const mac = req.params.mac
   const { status } = req.body
-  await pool.query('UPDATE rooms SET status=? WHERE mac_address=?', [status, mac])
+  await pool.query('UPDATE rooms SET status=? WHERE mac_address=? AND status="Inactive"', [status, mac])
   res.json({ success: true })
 })
 

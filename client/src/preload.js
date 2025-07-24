@@ -1,24 +1,31 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  removeFromPlaylist: (id) => ipcRenderer.invoke('remove-from-playlist', id),
-  seedDb: () => ipcRenderer.invoke('seedDb'),
-  truncateDb: () => ipcRenderer.invoke('truncateDb'),
+  // Database & File System
   getData: (collection) => ipcRenderer.invoke('getData', collection),
-  addToPlaylist: (song) => ipcRenderer.invoke('addToPlaylist', song),
   getStorageBaseDir: () => ipcRenderer.invoke('getStorageBaseDir'),
-  fileExists: (filePath) => ipcRenderer.invoke('fileExists', filePath),
-  loadYouTubeTV: () => ipcRenderer.invoke('loadYouTubeTV'),
-  loadHome: () => ipcRenderer.invoke('loadHome'),
-  injectYoutubeSearch: (keyword) => ipcRenderer.invoke('injectYoutubeSearch', keyword),
-  setSystemVolume: (value) => ipcRenderer.invoke('set-system-volume', value),
-  getSystemVolume: () => ipcRenderer.invoke('get-system-volume'),
-  setMicVolume: (value) => ipcRenderer.invoke('set-mic-volume', value),
-  getMicVolume: () => ipcRenderer.invoke('get-mic-volume'),
-  getPlaylist: () => ipcRenderer.invoke('getPlaylist'),
-  getServerUrl: () => ipcRenderer.invoke('getServerUrl'),
-  getMac: () => ipcRenderer.invoke('getMac'),
+  getBannerImages: () => ipcRenderer.invoke('get-banner-images'),
+
+  // Room Status
   getRoomStatusByMac: () => ipcRenderer.invoke('room-status-by-mac'),
   updateRoomStatusByMac: (status) => ipcRenderer.invoke('update-room-status-by-mac', status),
-  getBannerImages: () => ipcRenderer.invoke('get-banner-images')
+
+  // Video Window Control
+  openVideoWindow: () => ipcRenderer.invoke('open-video-window'),
+  closeVideoWindow: () => ipcRenderer.invoke('close-video-window'),
+  sendVideoControl: (command) => ipcRenderer.invoke('send-video-control', command),
+  onVideoControl: (callback) => ipcRenderer.on('video-control', (event, ...args) => callback(...args)),
+  onVideoEnded: (callback) => ipcRenderer.on('video-ended', (event, ...args) => callback(...args)),
+  sendVideoEnded: () => ipcRenderer.send('video-ended'),
+
+  // Config
+  getConfig: () => ipcRenderer.invoke('get-config'),
+
+  // YouTube Search
+  searchYoutube: (apiKey, query) => ipcRenderer.invoke('search-youtube', { apiKey, query }),
+
+  // Event listeners from main process
+  onVideoTimeUpdate: (callback) => ipcRenderer.on('video-time-update', (event, ...args) => callback(...args)),
+  onAddToPlaylist: (callback) => ipcRenderer.on('add-to-playlist', (event, ...args) => callback(...args)),
+  sendToMain: (channel, data) => ipcRenderer.send(channel, data)
 })
