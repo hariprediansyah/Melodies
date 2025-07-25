@@ -19,7 +19,7 @@ const DateDisplay = () => {
   }, [])
 
   return (
-    <div className='bg-black bg-opacity-50 p-4 rounded-2xl mb-4 text-white flex items-center justify-between shadow-lg border border-white/10'>
+    <div className='row-span-2 bg-black bg-opacity-50 p-4 rounded-2xl mb-4 text-white flex items-center justify-between shadow-lg border border-white/10'>
       <div>
         <p className='text-lg text-gray-300'>Today is a fantastic day!</p>
         <p className='font-bold text-xl text-brand-green-light'>{currentDate}</p>

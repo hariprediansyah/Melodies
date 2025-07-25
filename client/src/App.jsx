@@ -63,14 +63,14 @@ export default function App() {
 
   return (
     <div
-      className='h-screen bg-brand-dark text-white'
+      className='h-screen grid grid-rows-15 bg-brand-dark text-white overflow-hidden'
       style={{
         backgroundImage: `url('home_bg.png')`,
         backgroundSize: 'cover',
         backgroundPosition: 'center'
       }}>
       <Navbar onSearch={setSearchQuery} query={query} setQuery={setQuery} />
-      <main className='pt-20 h-full'>{renderPage()}</main>
+      {renderPage()}
     </div>
   )
 }

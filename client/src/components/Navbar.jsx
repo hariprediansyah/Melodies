@@ -68,7 +68,7 @@ const Navbar = ({ onSearch, query, setQuery }) => {
 
   return (
     <>
-      <nav className='fixed top-0 left-0 right-0 h-20 flex items-center justify-between px-8 z-50'>
+      <nav className='row-span-1 h-20 flex items-center justify-between px-8 z-50'>
         <div className='flex items-center gap-4'>
           <img src='logo_horizontal.png' width={400} alt='Logo' />
         </div>

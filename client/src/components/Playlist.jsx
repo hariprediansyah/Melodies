@@ -3,9 +3,9 @@ import { Play } from 'lucide-react'
 
 const Playlist = ({ playlist, onSelectSong, selectedSong, onPlaySong, currentSong }) => {
   return (
-    <div className='bg-black bg-opacity-50 border border-white/10 p-6 rounded-lg h-full  text-white flex flex-col'>
-      <h2 className='text-xl font-bold mb-4'>Playlist ({playlist.length})</h2>
-      <div className='flex-grow space-y-2 overflow-y-scroll'>
+    <div className='row-span-9 grid grid-rows-12 bg-black bg-opacity-50 border border-white/10 p-6 rounded-lg h-full  text-white'>
+      <h2 className='row-span-1 text-xl font-bold mb-4'>Playlist ({playlist.length})</h2>
+      <div className='row-span-11 space-y-2 overflow-y-scroll'>
         {playlist.length === 0 ? (
           <p className='text-gray-400 text-center mt-8'>Playlist is empty</p>
         ) : (

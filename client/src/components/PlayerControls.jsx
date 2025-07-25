@@ -39,7 +39,7 @@ const PlayerControls = ({ isPlaying, onPlayPause, onNext, onPrev, currentSong })
   }
 
   return (
-    <div className='bg-black bg-opacity-50 border border-white/10 p-4 rounded-lg mt-4 flex items-center justify-between text-white'>
+    <div className='row-span-2 bg-black bg-opacity-50 border border-white/10 p-4 rounded-lg mt-4 flex items-center justify-between text-white'>
       <div className='flex items-center gap-4'>
         <button onClick={onPrev} className='hover:text-brand-green-light transition-colors'>
           <SkipBack />

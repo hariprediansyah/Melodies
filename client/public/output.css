@@ -652,10 +652,6 @@ video {
   left: 0px;
 }
 
-.right-0 {
-  right: 0px;
-}
-
 .right-4 {
   right: 1rem;
 }
@@ -666,10 +662,6 @@ video {
 
 .right-8 {
   right: 2rem;
-}
-
-.top-0 {
-  top: 0px;
 }
 
 .top-20 {
@@ -694,6 +686,34 @@ video {
 
 .col-span-2 {
   grid-column: span 2 / span 2;
+}
+
+.row-span-1 {
+  grid-row: span 1 / span 1;
+}
+
+.row-span-10 {
+  grid-row: span 10 / span 10;
+}
+
+.row-span-11 {
+  grid-row: span 11 / span 11;
+}
+
+.row-span-14 {
+  grid-row: span 14 / span 14;
+}
+
+.row-span-2 {
+  grid-row: span 2 / span 2;
+}
+
+.row-span-7 {
+  grid-row: span 7 / span 7;
+}
+
+.row-span-9 {
+  grid-row: span 9 / span 9;
 }
 
 .my-6 {
@@ -797,14 +817,6 @@ video {
   height: 1.75rem;
 }
 
-.h-\[calc\(100\%-2rem\)\] {
-  height: calc(100% - 2rem);
-}
-
-.h-\[calc\(100vh-10rem\)\] {
-  height: calc(100vh - 10rem);
-}
-
 .h-full {
   height: 100%;
 }
@@ -861,10 +873,6 @@ video {
   flex-shrink: 0;
 }
 
-.flex-grow {
-  flex-grow: 1;
-}
-
 .-translate-y-2 {
   --tw-translate-y: -0.5rem;
   transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
@@ -919,6 +927,18 @@ video {
 
 .grid-cols-5 {
   grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.grid-rows-12 {
+  grid-template-rows: repeat(12, minmax(0, 1fr));
+}
+
+.grid-rows-15 {
+  grid-template-rows: repeat(15, minmax(0, 1fr));
+}
+
+.grid-rows-17 {
+  grid-template-rows: repeat(17, minmax(0, 1fr));
 }
 
 .flex-col {
@@ -1235,10 +1255,6 @@ video {
 .py-6 {
   padding-top: 1.5rem;
   padding-bottom: 1.5rem;
-}
-
-.pt-20 {
-  padding-top: 5rem;
 }
 
 .text-left {

@@ -220,11 +220,11 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
   }
 
   return (
-    <div className='p-8 h-full'>
-      <div className='grid grid-cols-3 gap-8 h-[calc(100vh-10rem)]'>
+    <div className='row-span-14 p-8'>
+      <div className='grid grid-cols-3 gap-8 h-full'>
         {/* Left Column */}
-        <div className='col-span-2 flex flex-col'>
-          <div className='flex-grow'>
+        <div className='col-span-2 grid grid-rows-15 gap-4 h-full overflow-hidden'>
+          <div className='row-span-10'>
             <SongList
               songs={currentSongs}
               onSelectSong={setSelectedSong}
@@ -232,7 +232,7 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
               isYoutubeMode={isYoutubeMode}
             />
           </div>
-          <div className='flex justify-between items-center mt-4'>
+          <div className='row-span-1 flex justify-between items-center mt-4'>
             <button
               onClick={() => paginate(currentPage - 1)}
               disabled={currentPage === 1}
@@ -249,7 +249,7 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
               Next
             </button>
           </div>
-          <div className='flex gap-4 mt-4'>
+          <div className='row-span-2 flex gap-4 mt-4'>
             <button
               onClick={onBankMusic}
               className='flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all'>
@@ -286,18 +286,16 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
         </div>
 
         {/* Right Column */}
-        <div className='col-span-1 flex flex-col'>
+        <div className='col-span-1 grid grid-rows-12 gap-4 h-full overflow-hidden'>
           <DateDisplay />
-          <div className='flex-grow'>
-            <Playlist
-              playlist={playlist}
-              onSelectSong={setSelectedSong}
-              selectedSong={selectedSong}
-              onPlaySong={(song) => playSongAtIndex(playlist.indexOf(song))}
-              currentSong={currentSong}
-            />
-          </div>
-          <div className='flex justify-between gap-4 mt-4'>
+          <Playlist
+            playlist={playlist}
+            onSelectSong={setSelectedSong}
+            selectedSong={selectedSong}
+            onPlaySong={(song) => playSongAtIndex(playlist.indexOf(song))}
+            currentSong={currentSong}
+          />
+          <div className='row-span-2 flex justify-between gap-4 mt-4'>
             <button
               onClick={handleTop}
               className='flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all'>
