@@ -7,6 +7,7 @@ let merger
 let gainLeft
 let gainRight
 let ytPlayer
+let isYoutube = false
 
 window.onYouTubeIframeAPIReady = function () {
   ytPlayer = new YT.Player('youtube-player', {
@@ -27,6 +28,8 @@ window.onYouTubeIframeAPIReady = function () {
 
 function onPlayerReady(event) {
   // Player is ready
+  youtubePlayerElement.style.display = 'block'
+  console.log(youtubePlayerElement)
 }
 
 function onPlayerStateChange(event) {
@@ -34,6 +37,8 @@ function onPlayerStateChange(event) {
     ytPlayer.playVideo()
   }
   if (event.data === YT.PlayerState.ENDED) {
+    ytPlayer.g.style.display = 'none'
+    videoElement.style.display = 'none'
     window.electronAPI.sendVideoEnded()
   }
 }
@@ -62,20 +67,37 @@ window.electronAPI.onVideoControl((command) => {
 
   switch (command.type) {
     case 'LOAD':
+      // Reset display dulu agar tidak ada yang tertinggal
+      videoElement.style.display = 'none'
+      youtubePlayerElement.style.display = 'none'
+      isYoutube = command.isYoutube
       if (command.isYoutube) {
+        ytPlayer.g.style.display = 'block'
+
         videoElement.pause()
         videoElement.src = ''
-        videoElement.style.display = 'none'
         youtubePlayerElement.style.display = 'block'
         if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
-          const videoId = command.src.split('/').pop().split('?')[0]
-          ytPlayer.loadVideoById(videoId)
+          // Ambil videoId dari command.videoId jika ada, jika tidak coba parsing dari src
+          let videoId = ''
+          if (command.videoId) {
+            videoId = command.videoId
+          } else if (command.src) {
+            // Coba regex untuk ambil videoId dari src
+            const match = command.src.match(/embed\/([\w-]+)/)
+            if (match && match[1]) videoId = match[1]
+          }
+          if (videoId) {
+            ytPlayer.loadVideoById(videoId)
+          } else {
+            console.error('videoId tidak ditemukan pada command:', command)
+          }
         }
       } else {
         if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
           ytPlayer.pauseVideo()
         }
-        youtubePlayerElement.style.display = 'none'
+        ytPlayer.g.style.display = 'none'
         videoElement.style.display = 'block'
         if (!audioContext) {
           setupAudioContext()
@@ -85,8 +107,10 @@ window.electronAPI.onVideoControl((command) => {
       }
       break
     case 'PLAY':
-      if (ytPlayer && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() !== -1) {
-        ytPlayer.playVideo()
+      if (isYoutube) {
+        if (ytPlayer && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() !== -1) {
+          ytPlayer.playVideo()
+        }
       } else {
         videoElement.play().catch((e) => console.error('Error playing video:', e))
         if (audioContext && audioContext.state === 'suspended') {
@@ -95,21 +119,23 @@ window.electronAPI.onVideoControl((command) => {
       }
       break
     case 'PAUSE':
-      if (ytPlayer && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() !== -1) {
-        ytPlayer.pauseVideo()
+      if (isYoutube) {
+        if (ytPlayer && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() !== -1) {
+          ytPlayer.pauseVideo()
+        }
       } else {
         videoElement.pause()
       }
       break
     case 'VOLUME':
-      if (command.isYoutube) {
+      if (isYoutube) {
         ytPlayer.setVolume(command.level * 100)
       } else {
         videoElement.volume = command.level
       }
       break
     case 'VOCAL':
-      if (!audioContext || command.isYoutube) return
+      if (!audioContext || isYoutube) return
       if (command.mode === 'off') {
         gainRight.disconnect()
         gainLeft.connect(merger, 0, 1)
@@ -122,6 +148,10 @@ window.electronAPI.onVideoControl((command) => {
 })
 
 videoElement.addEventListener('ended', () => {
+  videoElement.style.display = 'none'
+  ytPlayer.g.style.display = 'none'
+  console.log('Video ended')
+
   window.electronAPI.sendVideoEnded()
 })
 

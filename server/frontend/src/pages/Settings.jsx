@@ -79,7 +79,7 @@ export default function Settings() {
           </div>
 
           {/* Toggle Settings */}
-          <div className='mt-6 border-t border-gray-700 pt-6'>
+          <div className='mt-6 border-t border-white/10 pt-6'>
             <h3 className='text-lg font-semibold text-white mb-4'>Preferences</h3>
 
             <div className='space-y-4'>

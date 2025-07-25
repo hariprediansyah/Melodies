@@ -20,9 +20,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Config
   getConfig: () => ipcRenderer.invoke('get-config'),
+  getSysParam: (key) => ipcRenderer.invoke('get-sys-param', key),
 
   // YouTube Search
   searchYoutube: (apiKey, query) => ipcRenderer.invoke('search-youtube', { apiKey, query }),
+
+  // Playlist Sync
+  syncPlaylistAdd: (song) => ipcRenderer.invoke('sync-playlist-add', song),
+  syncPlaylistRemove: (songId) => ipcRenderer.invoke('sync-playlist-remove', songId),
+  syncPlaylistRemoveAll: () => ipcRenderer.invoke('sync-playlist-remove-all'),
+  syncPlaylistGet: () => ipcRenderer.invoke('sync-playlist-get'),
+
+  // Call Log Management
+  makeCall: () => ipcRenderer.invoke('make-call'),
+  checkCallStatus: (callId) => ipcRenderer.invoke('check-call-status', callId),
 
   // Event listeners from main process
   onVideoTimeUpdate: (callback) => ipcRenderer.on('video-time-update', (event, ...args) => callback(...args)),

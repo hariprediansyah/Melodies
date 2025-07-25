@@ -29,9 +29,13 @@ app.MapPost("/updateserver", async (HttpContext context) =>
         return Results.BadRequest("server_ip required");
 
     body.TryGetValue("client_mac", out var clientMac);
+    body.TryGetValue("client_room_name", out var clientRoomName);
+    body.TryGetValue("client_room_id", out var clientRoomId);
 
     syncService.UpdateSysParam("server_ip", serverIp);
     syncService.UpdateSysParam("client_mac", clientMac ?? "");
+    syncService.UpdateSysParam("client_room_name", clientRoomName ?? "");
+    syncService.UpdateSysParam("client_room_id", clientRoomId ?? "");
 
     syncService.Log($"Update sys_param server_ip ke {serverIp}, dengan mac {clientMac}");
     return Results.Ok(new { success = true });

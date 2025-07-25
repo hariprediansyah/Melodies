@@ -25,6 +25,8 @@ const apiCall = async (endpoint, options = {}) => {
 // Room Management API
 export const roomAPI = {
   getAll: () => apiCall('/rooms'),
+  getTotal: () => apiCall('/rooms/total'),
+  getActiveTotal: () => apiCall('/rooms/total-active'),
   create: (data) =>
     apiCall('/rooms', {
       method: 'POST',
@@ -50,7 +52,8 @@ export const roomAPI = {
   shutdownAll: () =>
     apiCall('/rooms/shutdown-all', {
       method: 'POST'
-    })
+    }),
+  getMacAddresses: () => apiCall('/mac-addresses')
 }
 
 // Songs Management API
@@ -69,12 +72,30 @@ export const songsAPI = {
   delete: (id) =>
     apiCall(`/songs/${id}`, {
       method: 'DELETE'
+    }),
+  totalSongs: () => apiCall('/songs/total')
+}
+
+// Call Logs Management API
+export const callLogAPI = {
+  getAll: () => apiCall('/call-logs'),
+  getActive: () => apiCall('/call-logs/active'),
+  acceptCall: (id) =>
+    apiCall(`/call-logs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'Accepted' })
+    }),
+  rejectCall: (id) =>
+    apiCall(`/call-logs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'Rejected' })
     })
 }
 
 // Banner Management API
 export const bannerAPI = {
   getAll: () => apiCall('/banners'),
+  total: () => apiCall('/banners/total'),
   create: (formData) =>
     fetch(`${API_BASE_URL}/banners`, {
       method: 'POST',

@@ -8,6 +8,7 @@ import LibrarySongs from './pages/LibrarySongs'
 import AddEditSong from './pages/AddEditSong'
 import ContentBanner from './pages/ContentBanner'
 import AddEditBanner from './pages/AddEditBanner'
+import Login from './pages/Login'
 
 const headerConfig = {
   dashboard: {
@@ -25,7 +26,7 @@ function Layout({ children, menu, onMenuChange }) {
   console.log('Layout component rendered with menu:', menu)
   const header = headerConfig[menu] || headerConfig.dashboard
   return (
-    <div className='flex h-screen bg-gray-900'>
+    <div className='flex h-screen bg-[#181818]'>
       <Sidebar activeMenu={menu} onMenuChange={onMenuChange} />
       <main className='flex-1 p-6 overflow-y-auto'>
         <Header title={header.title} desc={header.desc} menu={menu} />
@@ -37,6 +38,9 @@ function Layout({ children, menu, onMenuChange }) {
 
 export default function App() {
   console.log('App component rendered')
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
   const [activeMenu, setActiveMenu] = useState('dashboard')
   // Untuk navigasi page Room Management
   const [roomPageMode, setRoomPageMode] = useState('list') // 'list' | 'add' | 'edit'
@@ -47,6 +51,11 @@ export default function App() {
   // Untuk navigasi page Banner
   const [bannerPageMode, setBannerPageMode] = useState('list') // 'list' | 'add' | 'edit'
   const [editBannerId, setEditBannerId] = useState(null)
+
+  // Handle login
+  const handleLogin = () => {
+    setIsAuthenticated(true)
+  }
 
   // Room Management handlers
   const handleRoomAdd = () => {
@@ -134,6 +143,12 @@ export default function App() {
     }
   }
 
+  // If not authenticated, show login screen
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} />
+  }
+
+  // If authenticated, show main application
   return (
     <Layout menu={activeMenu} onMenuChange={setActiveMenu}>
       {renderContent()}

@@ -109,12 +109,78 @@ namespace ServiceSync
             return null;
         }
 
+        private string? GetSysParam(string key)
+        {
+            try
+            {
+                var cmd = _conn.CreateCommand();
+                cmd.CommandText = "SELECT value FROM sys_params WHERE key = $key";
+                cmd.Parameters.AddWithValue("$key", key);
+                return cmd.ExecuteScalar()?.ToString();
+            }
+            catch (Exception ex)
+            {
+                Log("ERROR getSysParam: " + ex.Message);
+                return null;
+            }
+        }
+
+        private async Task<bool> CheckForceShutdown(string serverUrl, string roomId)
+        {
+            try
+            {
+                var url = $"{serverUrl}/rooms/force-shutdown/{roomId}";
+                var response = await _http.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+                var json = await response.Content.ReadAsStringAsync();
+                return json.Contains("true");
+            }
+            catch (Exception ex)
+            {
+                Log($"Gagal cek force shutdown: {ex.Message}");
+                return false;
+            }
+        }
+
+        private void ForceShutdown()
+        {
+            try
+            {
+                Log("Melakukan shutdown paksa...");
+                var psi = new System.Diagnostics.ProcessStartInfo("shutdown", "/s /t 0")
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
+                System.Diagnostics.Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                Log("Gagal shutdown: " + ex.Message);
+            }
+        }
+
         private async Task Sync()
         {
             var serverUrl = GetServerUrl();
             if (serverUrl == null)
             {
                 Log("SERVER_URL belum di-set di sys_params. Sinkronisasi dilewati.");
+                return;
+            }
+
+            var roomId = GetSysParam("client_room_id");
+            if (string.IsNullOrEmpty(roomId))
+            {
+                Log("client_room_id belum di-set di sys_params. Sinkronisasi dilewati.");
+                return;
+            }
+
+            var shouldShutdown = await CheckForceShutdown(serverUrl, roomId);
+            if (shouldShutdown)
+            {
+                Log($"Flag force_shutdown aktif untuk room {roomId}. Shutdown akan dilakukan.");
+                ForceShutdown();
                 return;
             }
 
@@ -142,6 +208,7 @@ namespace ServiceSync
                 Console.WriteLine("[SYNC] Error: " + ex);
             }
         }
+
 
         private void SyncTable(string table, List<Dictionary<string, object>> rows, string[] columns)
         {

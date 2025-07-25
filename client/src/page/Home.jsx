@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import SongList from '../components/SongList'
 import Playlist from '../components/Playlist'
 import PlayerControls from '../components/PlayerControls'
 import DateDisplay from '../components/DateDisplay'
 import { Youtube, ListMusic, ListPlus } from 'lucide-react'
+import Util from '../Util'
 
-export default function Home({ onBankMusic, searchQuery }) {
+export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuery }) {
   const [playlist, setPlaylist] = useState([])
   const [localSongs, setLocalSongs] = useState([])
   const [allSongs, setAllSongs] = useState([])
@@ -18,6 +19,14 @@ export default function Home({ onBankMusic, searchQuery }) {
   const [selectedSong, setSelectedSong] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const songsPerPage = 10
+
+  const playlistRef = useRef([])
+  const currentIndexRef = useRef(-1)
+
+  useEffect(() => {
+    playlistRef.current = playlist
+    currentIndexRef.current = currentSongIndex
+  }, [playlist, currentSongIndex])
 
   const currentSong = currentSongIndex > -1 ? playlist[currentSongIndex] : null
   const displayedSongs = isYoutubeMode ? youtubeSongs : localSongs
@@ -40,23 +49,76 @@ export default function Home({ onBankMusic, searchQuery }) {
     window.electronAPI.getConfig().then(setConfig).catch(console.error)
   }, [])
 
+  // Fetch playlist dari server saat mount (lewat IPC)
+  useEffect(() => {
+    async function fetchPlaylistFromServer() {
+      try {
+        const data = await window.electronAPI.syncPlaylistGet()
+        console.log(data)
+
+        setPlaylist(
+          data.map((song) => ({
+            ...song,
+            isYoutube: !!song.is_youtube,
+            video_url: song.video_url
+          }))
+        )
+      } catch (err) {
+        console.error('Failed to fetch playlist from server:', err)
+      }
+    }
+    fetchPlaylistFromServer()
+  }, [])
+
+  // Tambahkan ke playlist dan sync ke server (lewat IPC)
+  const handleNewEntry = () => {
+    if (selectedSong && !playlist.find((p) => p.id === selectedSong.id)) {
+      selectedSong.isYoutube = isYoutubeMode
+      setPlaylist([...playlist, selectedSong])
+      window.electronAPI.syncPlaylistAdd(selectedSong)
+    }
+  }
+
+  const handleClearPlaylist = () => {
+    window.electronAPI.syncPlaylistRemoveAll()
+    setPlaylist([])
+    setCurrentSongIndex(-1)
+    setIsPlaying(false)
+  }
+
+  // Hapus dari playlist dan sync ke server (lewat IPC)
+  const handleDelete = () => {
+    if (selectedSong) {
+      const newPlaylist = playlist.filter((p) => p.id !== selectedSong.id)
+      setPlaylist(newPlaylist)
+      window.electronAPI.syncPlaylistRemove(selectedSong.id)
+      if (currentSong && currentSong.id === selectedSong.id) {
+        setCurrentSongIndex(-1)
+        setIsPlaying(false)
+        window.electronAPI.closeVideoWindow()
+      }
+    }
+  }
+
+  // Saat lagu selesai, hapus dari playlist dan sync ke server (lewat IPC)
   useEffect(() => {
     const handleSongEnd = () => {
-      if (currentSongIndex > -1) {
+      const playlist = playlistRef.current
+      const currentSongIndex = currentIndexRef.current
+      if (currentSongIndex > -1 && playlist.length > 0) {
+        const songId = playlist[currentSongIndex]?.id
         const newPlaylist = playlist.filter((_, i) => i !== currentSongIndex)
         setPlaylist(newPlaylist)
-
+        if (songId) window.electronAPI.syncPlaylistRemove(songId)
         if (newPlaylist.length > 0) {
-          // Select next song but don't play
-          const nextIndex = currentSongIndex % newPlaylist.length
+          const nextIndex = currentSongIndex >= newPlaylist.length ? 0 : currentSongIndex
           setCurrentSongIndex(nextIndex)
           setSelectedSong(newPlaylist[nextIndex])
-          setIsPlaying(false)
+          playSongAtIndex(nextIndex)
         } else {
-          // Playlist is empty
           setCurrentSongIndex(-1)
+          setSelectedSong(null)
           setIsPlaying(false)
-          window.electronAPI.closeVideoWindow()
         }
       }
     }
@@ -72,7 +134,7 @@ export default function Home({ onBankMusic, searchQuery }) {
     return () => {
       // Cleanup if necessary, though electronAPI might not support removing listeners
     }
-  }, [currentSongIndex, playlist])
+  }, [])
 
   // Handle search query changes
   useEffect(() => {
@@ -150,32 +212,6 @@ export default function Home({ onBankMusic, searchQuery }) {
     playSongAtIndex(prevIndex)
   }, [currentSongIndex, playlist.length, playSongAtIndex])
 
-  const handleNewEntry = () => {
-    if (selectedSong && !playlist.find((p) => p.id === selectedSong.id)) {
-      console.log(selectedSong)
-      selectedSong.isYoutube = isYoutubeMode
-      setPlaylist([...playlist, selectedSong])
-    }
-  }
-
-  const handleClearPlaylist = () => {
-    setPlaylist([])
-    setCurrentSongIndex(-1)
-    setIsPlaying(false)
-  }
-
-  const handleDelete = () => {
-    if (selectedSong) {
-      const newPlaylist = playlist.filter((p) => p.id !== selectedSong.id)
-      setPlaylist(newPlaylist)
-      if (currentSong && currentSong.id === selectedSong.id) {
-        setCurrentSongIndex(-1)
-        setIsPlaying(false)
-        window.electronAPI.closeVideoWindow()
-      }
-    }
-  }
-
   const handleTop = () => {
     if (selectedSong && playlist.find((p) => p.id === selectedSong.id)) {
       const otherSongs = playlist.filter((p) => p.id !== selectedSong.id)
@@ -189,7 +225,12 @@ export default function Home({ onBankMusic, searchQuery }) {
         {/* Left Column */}
         <div className='col-span-2 flex flex-col'>
           <div className='flex-grow'>
-            <SongList songs={currentSongs} onSelectSong={setSelectedSong} selectedSong={selectedSong} />
+            <SongList
+              songs={currentSongs}
+              onSelectSong={setSelectedSong}
+              selectedSong={selectedSong}
+              isYoutubeMode={isYoutubeMode}
+            />
           </div>
           <div className='flex justify-between items-center mt-4'>
             <button
@@ -211,24 +252,27 @@ export default function Home({ onBankMusic, searchQuery }) {
           <div className='flex gap-4 mt-4'>
             <button
               onClick={onBankMusic}
-              className='flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all'>
+              className='flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all'>
               <ListMusic /> Bank Music
             </button>
             <button
               onClick={() => {
                 if (isYoutubeMode) {
                   setLocalSongs(allSongs)
+                  setSearchQuery('')
+                  setQuery('')
                 }
                 setIsYoutubeMode(!isYoutubeMode)
               }}
-              className={`flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all ${
+              className={`flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all ${
                 isYoutubeMode ? 'bg-red-600' : ''
               }`}>
-              <Youtube /> YouTube
+              <img src='youtube.png' width={30} />
+              YouTube
             </button>
             <button
               onClick={handleNewEntry}
-              className='flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all'>
+              className='flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all'>
               <ListPlus /> New Entry
             </button>
           </div>
@@ -256,17 +300,17 @@ export default function Home({ onBankMusic, searchQuery }) {
           <div className='flex justify-between gap-4 mt-4'>
             <button
               onClick={handleTop}
-              className='flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 text-white font-bold py-3 px-4 rounded-lg transition-all'>
+              className='flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all'>
               TOP
             </button>
             <button
               onClick={handleDelete}
-              className='flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 text-white font-bold py-3 px-4 rounded-lg transition-all'>
+              className='flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all'>
               DEL
             </button>
             <button
               onClick={handleClearPlaylist}
-              className='flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 text-white font-bold py-3 px-4 rounded-lg transition-all'>
+              className='flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all'>
               CLR
             </button>
           </div>

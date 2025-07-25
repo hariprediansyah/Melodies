@@ -63,10 +63,37 @@ app.get('/rooms', async (req, res) => {
   res.json(rows)
 })
 
+app.get('/rooms/force-shutdown/:id', async (req, res) => {
+  const [row] = await pool.query('SELECT force_shutdown FROM rooms WHERE id = ?', [req.params.id])
+  await pool.query('UPDATE rooms SET force_shutdown = NULL WHERE id = ?', [req.params.id])
+  res.json(row.force_shutdown === 'Y')
+})
+
+app.get('/rooms/total', async (req, res) => {
+  const [rows] = await pool.query('SELECT COUNT(*) as total FROM rooms')
+  res.json(rows[0])
+})
+
+app.get('/rooms/total-active', async (req, res) => {
+  const [rows] = await pool.query('SELECT COUNT(*) as total FROM rooms WHERE status = "Active"')
+  res.json(rows[0])
+})
+
+app.get('/roomsdashboard', async (req, res) => {
+  const [rows] = await pool.query(
+    `SELECT A.id, A.name, A.status, C.Total, B.start_time FROM rooms A
+    left join room_sessions B ON A.id = B.room_id AND B.status = 'Active'
+    left join (SELECT COUNT(*) as Total, room_id from song_playlist GROUP by room_id) C ON A.id = C.room_id
+    ORDER BY A.id ASC`
+  )
+  res.json(rows)
+})
+
 // Endpoint shutdown all room
 app.post('/rooms/shutdown-all', async (req, res) => {
   try {
-    const [result] = await pool.query('UPDATE rooms SET status = "Inactive"')
+    const [result] = await pool.query('UPDATE rooms SET status = "Inactive", force_shutdown = "Y"')
+    await pool.query('UPDATE room_sessions SET status = "Ended" where status = "Active"')
     res.json({ success: true, affectedRows: result.affectedRows })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
@@ -157,6 +184,10 @@ app.get('/songs', async (req, res) => {
   const [rows] = await pool.query('SELECT * FROM songs ORDER BY id ASC')
   res.json(rows)
 })
+app.get('/songs/total', async (req, res) => {
+  const [rows] = await pool.query('SELECT COUNT(*) as total FROM songs')
+  res.json(rows[0])
+})
 app.post(
   '/songs',
   upload.fields([
@@ -199,11 +230,11 @@ app.post(
           fs.unlinkSync(tempPath)
           fs.unlinkSync(outPath)
 
-          songFileName = 'song_' + Date.now() + '.mp4'
+          songFileName = 'song.mp4'
         } else {
           // Format selain .dat
           format = ext.replace('.', '')
-          songFileName = 'song_' + Date.now() + ext
+          songFileName = 'song' + ext
         }
 
         // Simpan metadata lagu
@@ -361,6 +392,11 @@ app.get('/banners', async (req, res) => {
   )
   res.json(rows)
 })
+
+app.get('/banners/total', async (req, res) => {
+  const [rows] = await pool.query('SELECT COUNT(*) as total FROM banners')
+  res.json(rows[0])
+})
 app.post('/banners', upload.single('image'), async (req, res) => {
   const { title, description } = req.body
   // Insert banner tanpa gambar dulu
@@ -470,11 +506,172 @@ app.get('/files/banner/:filename', (req, res) => {
   }
 })
 
+// --- PLAYLIST MANAGEMENT ---
+app.get('/playlist', async (req, res) => {
+  const roomId = req.query.room_id
+  if (!roomId) return res.status(400).json({ success: false, error: 'room_id required' })
+  try {
+    const [playlist] = await pool.query('SELECT * FROM song_playlist WHERE room_id=?', [roomId])
+    res.json(playlist)
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+app.post('/playlist', async (req, res) => {
+  const { room_id, id, title, artist, video_url, is_youtube } = req.body
+  try {
+    await pool.query(
+      'INSERT INTO song_playlist (room_id, id, title, artist, video_url, is_youtube) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE title=VALUES(title), artist=VALUES(artist), video_url=VALUES(video_url), is_youtube=VALUES(is_youtube)',
+      [room_id, id, title, artist, video_url, is_youtube]
+    )
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.delete('/playlist/:id', async (req, res) => {
+  const songId = req.params.id
+  const roomId = req.query.room_id
+  try {
+    if (!roomId) return res.status(400).json({ success: false, error: 'room_id required' })
+    await pool.query('DELETE FROM song_playlist WHERE id=? AND room_id=?', [songId, roomId])
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.delete('/playlist', async (req, res) => {
+  const roomId = req.query.room_id
+  try {
+    if (!roomId) return res.status(400).json({ success: false, error: 'room_id required' })
+    await pool.query('DELETE FROM song_playlist WHERE room_id=?', [roomId])
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
 // Endpoint untuk trigger scan MAC address dan update IP
 app.post('/scan-mac', async (req, res) => {
   try {
     const log = await macScanner.scanAndUpdateRooms()
     res.json({ success: true, log })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+// --- MAC ADDRESS MANAGEMENT ---
+app.get('/mac-addresses', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT mac_address FROM master_mac ORDER BY mac_address ASC')
+    res.json(rows.map((row) => row.mac_address))
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+// --- CALL LOG MANAGEMENT ---
+app.get('/call-logs', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT cl.id, cl.room_id, r.name as room_name, cl.status, cl.created_at
+      FROM call_log cl
+      JOIN rooms r ON cl.room_id = r.id
+      ORDER BY cl.created_at DESC
+      LIMIT 20
+    `)
+    res.json(rows)
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.get('/call-logs/active', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT cl.id, cl.room_id, r.name as room_name, cl.status, cl.created_at
+      FROM call_log cl
+      JOIN rooms r ON cl.room_id = r.id
+      WHERE cl.status = 'Calling'
+      ORDER BY cl.created_at DESC
+    `)
+    res.json(rows)
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.get('/call-logs/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const [rows] = await pool.query(
+      `
+      SELECT cl.id, cl.room_id, r.name as room_name, cl.status, cl.created_at
+      FROM call_log cl
+      JOIN rooms r ON cl.room_id = r.id
+      WHERE cl.id = ?
+    `,
+      [id]
+    )
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Call log not found' })
+    }
+
+    res.json(rows[0])
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/call-logs', async (req, res) => {
+  try {
+    const { room_id } = req.body
+    if (!room_id) {
+      return res.status(400).json({ success: false, error: 'Room ID is required' })
+    }
+
+    // Check if room exists
+    const [roomCheck] = await pool.query('SELECT id FROM rooms WHERE id = ?', [room_id])
+    if (roomCheck.length === 0) {
+      return res.status(404).json({ success: false, error: 'Room not found' })
+    }
+
+    // Create new call log
+    const [result] = await pool.query('INSERT INTO call_log (room_id, status) VALUES (?, "Calling")', [room_id])
+
+    res.json({
+      success: true,
+      call_id: result.insertId
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.put('/call-logs/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { status } = req.body
+
+    if (!status || !['Accepted', 'Rejected'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'Valid status (Accepted/Rejected) is required' })
+    }
+
+    // Update call log status
+    const [result] = await pool.query('UPDATE call_log SET status = ? WHERE id = ? AND status = "Calling"', [
+      status,
+      id
+    ])
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, error: 'Call log not found or already processed' })
+    }
+
+    res.json({ success: true })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
   }

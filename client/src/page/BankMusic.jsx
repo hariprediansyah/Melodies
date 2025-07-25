@@ -44,7 +44,7 @@ export default function BankMusic({ onBack }) {
       </h2>
       <div className='bg-black bg-opacity-20 rounded-lg'>
         <table className='w-full text-left'>
-          <thead className='text-gray-400 border-b border-gray-700'>
+          <thead className='text-gray-400 border-b border-white/10'>
             <tr>
               <th className='p-4 w-12'>#</th>
               <th className='p-4'>Title</th>

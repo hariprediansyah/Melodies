@@ -3,6 +3,14 @@ const path = require('path')
 const fs = require('fs')
 const Database = require('better-sqlite3')
 const macaddress = require('macaddress')
+// Tambahkan Express server untuk static file
+const express = require('express')
+const httpServer = express()
+httpServer.use(express.static(path.join(__dirname, '..', 'public')))
+const PORT = 5772
+httpServer.listen(PORT, () => {
+  console.log('Static server running on http://localhost:' + PORT)
+})
 
 // Helper to get the base path, works for dev and prod
 function getAppBasePath() {
@@ -19,11 +27,11 @@ if (!fs.existsSync(storageDir)) {
   fs.mkdirSync(storageDir, { recursive: true })
 }
 
-// ... (DB initialization code)
-
 // Window references
 let mainWindow = null
 let videoWindow = null
+
+app.disableHardwareAcceleration()
 
 function createVideoWindow() {
   const displays = screen.getAllDisplays()
@@ -44,10 +52,17 @@ function createVideoWindow() {
       frame: false,
       webPreferences: {
         preload: path.join(__dirname, 'dist', 'preload.bundle.js'),
-        contextIsolation: true
+        contextIsolation: true,
+        webSecurity: false, // Nonaktifkan web security agar YouTube embed bisa berjalan
+        sandbox: false // Pastikan sandbox juga nonaktif
       }
     })
-    videoWindow.loadFile(path.join(__dirname, '..', 'public', 'video.html'))
+    // Set user-agent agar YouTube tidak mendeteksi Electron
+    videoWindow.webContents.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+    )
+    // Ganti loadFile menjadi loadURL ke static server
+    videoWindow.loadURL('http://localhost:5772/video.html')
     videoWindow.on('closed', () => {
       videoWindow = null
     })
@@ -188,6 +203,11 @@ ipcMain.handle('search-youtube', async (_, { apiKey, query }) => {
   }
 })
 
+ipcMain.handle('get-sys-param', async (_, key) => {
+  const row = db.prepare('SELECT value FROM sys_params WHERE key = ?').get(key)
+  return row?.value || null
+})
+
 // Listen for time updates from video window and forward to main window
 ipcMain.on('video-time-update', (event, timeData) => {
   if (mainWindow) {
@@ -204,6 +224,142 @@ ipcMain.on('video-ended', () => {
 ipcMain.on('add-to-playlist', (event, song) => {
   if (mainWindow) {
     mainWindow.webContents.send('add-to-playlist', song)
+  }
+})
+
+const getSysParamFromDb = (key) => {
+  try {
+    const row = db.prepare('SELECT value FROM sys_params WHERE key = ?').get(key)
+    return row ? row.value : null
+  } catch (err) {
+    console.error('Failed to get sysparam from db:', err)
+    return null
+  }
+}
+
+ipcMain.handle('sync-playlist-add', async (_, song) => {
+  try {
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+    const payload = {
+      room_id,
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      video_url: song.video_url || '',
+      is_youtube: !!song.isYoutube
+    }
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    await fetch(`http://${server_ip}/playlist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    return true
+  } catch (err) {
+    console.error('Failed to sync playlist add:', err)
+    return false
+  }
+})
+
+ipcMain.handle('sync-playlist-remove', async (_, songId) => {
+  try {
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    await fetch(`http://${server_ip}/playlist/${songId}?room_id=${room_id}`, {
+      method: 'DELETE'
+    })
+    return true
+  } catch (err) {
+    console.error('Failed to sync playlist remove:', err)
+    return false
+  }
+})
+
+ipcMain.handle('sync-playlist-remove-all', async () => {
+  try {
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    await fetch(`http://${server_ip}/playlist?room_id=${room_id}`, {
+      method: 'DELETE'
+    })
+    return true
+  } catch (err) {
+    console.error('Failed to sync playlist remove:', err)
+    return false
+  }
+})
+
+ipcMain.handle('get-banner-images', async () => {
+  try {
+    const bannersDir = path.join(basePath, 'storage', 'banners')
+    const files = fs.readdirSync(bannersDir)
+    const images = files
+      .filter((f) => /\.(jpg|jpeg|png)$/i.test(f))
+      .map((f) => 'file://' + path.join(bannersDir, f).replace(/\\/g, '/'))
+    return images
+  } catch (e) {
+    return []
+  }
+})
+
+ipcMain.handle('sync-playlist-get', async () => {
+  try {
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    const res = await fetch(`http://${server_ip}/playlist?room_id=${room_id}`)
+    if (!res.ok) throw new Error('Failed to fetch playlist')
+    const data = await res.json()
+    return data
+  } catch (err) {
+    console.error('Failed to fetch playlist from server:', err)
+    return []
+  }
+})
+
+// Call Log Management
+ipcMain.handle('make-call', async () => {
+  try {
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    const res = await fetch(`http://${server_ip}/call-logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room_id })
+    })
+    if (!res.ok) throw new Error('Failed to create call log')
+    const data = await res.json()
+    return data
+  } catch (err) {
+    console.error('Failed to make call:', err)
+    throw err
+  }
+})
+
+ipcMain.handle('check-call-status', async (_, callId) => {
+  try {
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!server_ip) throw new Error('server_ip not found')
+
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    const res = await fetch(`http://${server_ip}/call-logs/${callId}`)
+
+    if (!res.ok) throw new Error('Failed to check call status')
+    const data = await res.json()
+    return data
+  } catch (err) {
+    console.error('Failed to check call status:', err)
+    throw err
   }
 })
 
