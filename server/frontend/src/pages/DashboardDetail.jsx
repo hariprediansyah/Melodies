@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { roomAPI, callLogAPI, songsAPI } from '../services/api'
 import { CardRoom, ToastNotif, useNotifStack } from '../components/Components'
+import { ArrowLeft } from 'lucide-react'
 
 const API_URL = 'http://localhost:4000'
 
-export default function Dashboard({ onDetail }) {
+export default function DashboardDetail({ room, onBack }) {
   const [rooms, setRooms] = useState([])
   const [activeCalls, setActiveCalls] = useState([])
   const [recentCalls, setRecentCalls] = useState([])
@@ -14,10 +15,11 @@ export default function Dashboard({ onDetail }) {
   const [currentTime, setCurrentTime] = useState('')
   const [totalSong, setTotalSong] = useState(0)
   const [search, setSearch] = useState('')
+  const [playlist, setPlaylist] = useState([])
 
   useEffect(() => {
     fetchRooms()
-    fetchCalls()
+    fetchPlaylist()
     fetchSongs()
 
     const updateDate = () => {
@@ -32,17 +34,6 @@ export default function Dashboard({ onDetail }) {
     }
 
     updateDate()
-
-    // Set up intervals for periodic updates
-    const dateTimer = setInterval(updateDate, 60000) // Update date/time every minute
-    const callsTimer = setInterval(fetchCalls, 5000) // Check for new calls every 5 seconds
-    const roomsTimer = setInterval(fetchRooms, 30000) // Update rooms every 30 seconds
-
-    return () => {
-      clearInterval(dateTimer)
-      clearInterval(callsTimer)
-      clearInterval(roomsTimer)
-    }
   }, [])
 
   const fetchRooms = async () => {
@@ -58,19 +49,13 @@ export default function Dashboard({ onDetail }) {
     }
   }
 
-  const fetchCalls = async () => {
+  const fetchPlaylist = async () => {
     try {
-      // Get active calls (status = 'Calling')
-      const activeCallsData = await callLogAPI.getActive()
+      console.log(room)
 
-      setActiveCalls(activeCallsData)
-
-      // Get all recent calls
-      const allCallsData = await callLogAPI.getAll()
-      // Filter out active calls and keep only the most recent ones
-      const recentCompletedCalls = allCallsData.filter((call) => call.status !== 'Calling').slice(0, 5) // Keep only the 5 most recent completed calls
-
-      setRecentCalls(recentCompletedCalls)
+      const playlists = await roomAPI.getPlaylist(room.id)
+      setPlaylist(playlists)
+      console.log('Fetched playlist:', playlists)
     } catch (e) {
       console.error('Error fetching calls:', e)
     }
@@ -153,21 +138,23 @@ export default function Dashboard({ onDetail }) {
     <div>
       <ToastNotif notifs={notifs} onClose={onClose} />
 
+      {/* Button back */}
+      <div className='flex items-center mb-4 cursor-pointer' onClick={onBack}>
+        <ArrowLeft className='text-[#B1C953]' />
+        <p className='ml-2 font-semibold text-[#B1C953]'>Back</p>
+      </div>
       {/* Hero Banner */}
       <div className='rounded-2xl bg-[url("./bg_dashboard.png")] bg-cover bg-center p-8 mb-6'>
-        <h1 className='text-4xl font-bold text-white'>Unleash Your Inner Star!</h1>
-        <p className='text-2xl text-white/90 mt-2'>The Ultimate Karaoke Experience!</p>
+        <h1 className='text-4xl font-bold text-white'>{room.name}</h1>
+        <p className='text-2xl text-white/90 mt-2'>Started at {formatTimestamp(room.start_time)}</p>
 
         {/* Status Cards */}
         <div className='flex gap-4 mt-6'>
           <div className='bg-black/20 backdrop-blur-sm border border-white/10 rounded-lg px-6 py-3 text-white font-medium flex items-center gap-2'>
-            Status Online <div className='w-2 h-2 bg-green-500 rounded-full ml-1'></div>
+            Active <div className='w-2 h-2 bg-green-500 rounded-full ml-1'></div>
           </div>
           <div className='bg-black/20 backdrop-blur-sm border border-white/10 rounded-lg px-6 py-3 text-white font-medium'>
-            Room Active <span className='ml-2'>{activeRoomsAll.length || 0}</span>
-          </div>
-          <div className='bg-black/20 backdrop-blur-sm border border-white/10 rounded-lg px-6 py-3 text-white font-medium'>
-            Library Songs <span className='ml-2'>{totalSong || 0}</span>
+            Song Queue <span className='ml-2'>{activeRoomsAll.length || 0}</span>
           </div>
         </div>
       </div>
@@ -226,7 +213,6 @@ export default function Dashboard({ onDetail }) {
                   key={room.id}
                   handleStartSession={handleStartSession}
                   handleStopSession={handleEndSession}
-                  handleDetail={() => onDetail(room)}
                 />
               ))
             ) : (
@@ -255,62 +241,17 @@ export default function Dashboard({ onDetail }) {
 
           {/* Activities */}
           <div>
-            <div className='font-semibold text-white mb-2'>Activities</div>
+            <div className='font-semibold text-white mb-2 flex justify-between'>
+              <span>Recent Played Songs</span>
+              <span className='text-green-400'>{playlist.length || 0} Songs</span>
+            </div>
             <div className='flex flex-col gap-2'>
               {/* Active Calls */}
-              {activeCalls.map((call) => (
+              {playlist.map((call) => (
                 <div key={call.id} className='flex items-center justify-between bg-[#23262e] rounded-lg px-3 py-2'>
-                  <span className='text-white text-sm'>
-                    Calling to room <span className='text-lime-400 font-semibold'>{call.room_name}</span>
-                  </span>
-                  <span className='flex gap-1'>
-                    <button
-                      className='bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold'
-                      onClick={() => handleRejectCall(call.id)}>
-                      ✕
-                    </button>
-                    <button
-                      className='bg-green-600 hover:bg-green-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold'
-                      onClick={() => handleAcceptCall(call.id)}>
-                      ✓
-                    </button>
-                  </span>
+                  <span className='text-white text-sm font-semibold'>{call.title}</span>
                 </div>
               ))}
-
-              {/* Recent Completed Calls */}
-              {recentCalls.map((call) => (
-                <div key={call.id} className='flex items-center justify-between bg-[#23262e] rounded-lg px-3 py-2'>
-                  <span className='text-white text-sm'>
-                    Calling to room{' '}
-                    <span
-                      className={
-                        call.status === 'Accepted' ? 'text-green-300 font-semibold' : 'text-yellow-300 font-semibold'
-                      }>
-                      {call.room_name}
-                    </span>
-                    <span className='text-gray-400 text-xs ml-2'>{formatTimestamp(call.created_at)}</span>
-                  </span>
-                  <span
-                    className={`rounded px-3 py-1 text-xs font-semibold ${
-                      call.status === 'Accepted' ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'
-                    }`}>
-                    {call.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Shutdown All Room */}
-          <div className='mt-auto'>
-            <div className='bg-[#1f1f1f] rounded-xl p-6'>
-              <div className='font-bold text-white mb-2'>Shutdown All Room</div>
-              <button
-                className='bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg text-lg w-full'
-                onClick={handleShutdownAll}>
-                Shutdown
-              </button>
             </div>
           </div>
         </div>

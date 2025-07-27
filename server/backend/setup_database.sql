@@ -64,23 +64,33 @@ CREATE TABLE IF NOT EXISTS song_playlist (
   artist VARCHAR(100),
   video_url VARCHAR(255),
   is_youtube BOOLEAN DEFAULT 0
-)
+);
+
+CREATE TABLE IF NOT EXISTS song_youtube_history (
+  room_id INT,
+  id VARCHAR(255) PRIMARY KEY,
+  title VARCHAR(255),
+  artist VARCHAR(100),
+  video_url VARCHAR(255),
+  play_count INT DEFAULT 0,
+  is_youtube BOOLEAN DEFAULT 0
+);
 
 CREATE TABLE IF NOT EXISTS call_log (
   id INT AUTO_INCREMENT PRIMARY KEY,
   room_id INT NOT NULL,
   status ENUM('Calling', 'Accepted', 'Rejected') DEFAULT 'Calling',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)
+);
 
 CREATE TABLE IF NOT EXISTS master_mac (
   mac_address VARCHAR(100) PRIMARY KEY
-)
+);
 
 CREATE TABLE IF NOT EXISTS sys_params (
-  key VARCHAR(100) PRIMARY KEY,
-  value TEXT
-)
+  param_key VARCHAR(100) PRIMARY KEY,
+  param_value TEXT
+);
 
-INSERT INTO sys_params (key, value) VALUES ('login_userid', 'admin');
-INSERT INTO sys_params (key, value) VALUES ('login_password', 'greenhouse1198');
+INSERT INTO sys_params (param_key, param_value) VALUES ('login_userid', 'admin');
+INSERT INTO sys_params (param_key, param_value) VALUES ('login_password', 'greenhouse1198');

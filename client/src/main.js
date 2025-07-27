@@ -6,6 +6,8 @@ const macaddress = require('macaddress')
 // Tambahkan Express server untuk static file
 const express = require('express')
 const httpServer = express()
+const license = require('./license')
+
 httpServer.use(express.static(path.join(__dirname, '..', 'public')))
 const PORT = 5772
 httpServer.listen(PORT, () => {
@@ -92,7 +94,7 @@ function createWindow() {
 // --- ALL IPC HANDLERS ---
 
 // Database & File System
-ipcMain.handle('getData', (_, collection) => db.prepare(`SELECT * FROM ${collection}`).all())
+ipcMain.handle('getSongs', () => db.prepare('SELECT * FROM songs ORDER BY title COLLATE NOCASE ASC').all())
 ipcMain.handle('getStorageBaseDir', () => path.resolve(basePath, 'storage'))
 ipcMain.handle('getBannerImages', async () => {
   try {
@@ -295,6 +297,54 @@ ipcMain.handle('sync-playlist-remove-all', async () => {
   }
 })
 
+ipcMain.handle('fileExists', (_, filePath) => {
+  return fs.existsSync(filePath)
+})
+
+ipcMain.handle('checkAdmin', async (_, password) => {
+  try {
+    console.log('Checking admin password:', password)
+
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!server_ip) throw new Error('server_ip not found')
+
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    const res = await fetch(`http://${server_ip}/validate-admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    })
+    if (!res.ok) {
+      console.log('Failed to check admin password:', res.statusText)
+      return false
+    }
+    return res.ok
+  } catch (err) {
+    console.log('Failed to check admin password:', err)
+    console.error('Failed to check admin password:', err)
+    return err
+  }
+})
+
+ipcMain.handle('youtube-recommendations', async (_, apiKey) => {
+  try {
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!server_ip) throw new Error('server_ip not found')
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    const res = await fetch(`http://${server_ip}/youtube-history`)
+    if (!res.ok) throw new Error('Failed to get youtube recommendations')
+    const data = await res.json()
+    return data.data
+  } catch (err) {
+    console.error('Failed to get youtube recommendations:', err)
+    return []
+  }
+})
+
+ipcMain.handle('close-app', () => {
+  app.quit()
+})
+
 ipcMain.handle('get-banner-images', async () => {
   try {
     const bannersDir = path.join(basePath, 'storage', 'banners')
@@ -361,6 +411,19 @@ ipcMain.handle('check-call-status', async (_, callId) => {
     console.error('Failed to check call status:', err)
     throw err
   }
+})
+
+//license
+ipcMain.handle('license:isLicensed', () => {
+  return license.isLicensed()
+})
+
+ipcMain.handle('license:activate', async (event, licenseKey) => {
+  return await license.activateLicense(licenseKey)
+})
+
+ipcMain.handle('license:getHardwareId', () => {
+  return license.getHardwareId()
 })
 
 // App Lifecycle

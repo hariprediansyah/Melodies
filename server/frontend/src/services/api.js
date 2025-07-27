@@ -10,6 +10,7 @@ const apiCall = async (endpoint, options = {}) => {
       },
       ...options
     })
+    console.log(response)
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
@@ -27,6 +28,7 @@ export const roomAPI = {
   getAll: () => apiCall('/rooms'),
   getTotal: () => apiCall('/rooms/total'),
   getActiveTotal: () => apiCall('/rooms/total-active'),
+  getPlaylist: (id) => apiCall(`/playlist?room_id=${id}`),
   create: (data) =>
     apiCall('/rooms', {
       method: 'POST',
@@ -79,6 +81,11 @@ export const songsAPI = {
 // Call Logs Management API
 export const callLogAPI = {
   getAll: () => apiCall('/call-logs'),
+  login: (data) =>
+    apiCall('/login', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
   getActive: () => apiCall('/call-logs/active'),
   acceptCall: (id) =>
     apiCall(`/call-logs/${id}`, {
@@ -109,5 +116,14 @@ export const bannerAPI = {
   delete: (id) =>
     apiCall(`/banners/${id}`, {
       method: 'DELETE'
+    })
+}
+
+export const systemAPI = {
+  licenseStatus: () => apiCall('/license-status'),
+  activateLicense: (licenseKey) =>
+    apiCall('/activate-license', {
+      method: 'POST',
+      body: JSON.stringify({ licenseKey })
     })
 }

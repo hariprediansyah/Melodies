@@ -11,6 +11,7 @@ const mime = require('mime-types')
 const ffprobe = require('ffprobe')
 const ffprobeStatic = require('ffprobe-static')
 const macScanner = require('./macScanner')
+const license = require('./license')
 
 // Jalankan scan MAC address otomatis setiap 30 detik
 setInterval(() => {
@@ -54,6 +55,49 @@ async function deteksiFormat(filePath) {
     throw new Error('Format file tidak dikenali')
   }
 }
+
+// // Cek lisensi saat startup
+// if (!license.isLicensed()) {
+//   console.error('Aplikasi belum diaktivasi. Silakan aktivasi dengan license key.')
+//   process.exit(1)
+// }
+
+// Endpoint aktivasi lisensi (opsional, untuk testing manual)
+app.post('/activate-license', async (req, res) => {
+  const { licenseKey } = req.body
+  console.log('Activating license with key:', licenseKey)
+
+  if (!licenseKey) return res.status(400).json({ success: false, message: 'License key required' })
+  const result = await license.activateLicense(licenseKey)
+  console.log('License activation result:', result)
+  if (result.success) {
+    res.json({ success: true })
+    // setTimeout(() => process.exit(0), 1000) // restart agar lisensi aktif
+  } else {
+    res.status(400).json({ success: false, message: result.message || 'Activation failed' })
+  }
+})
+
+// Endpoint cek status lisensi
+app.get('/license-status', (req, res) => {
+  try {
+    const fs = require('fs')
+    const path = require('path')
+    const LICENSE_FILE = path.join(__dirname, 'licensed.json')
+    if (!fs.existsSync(LICENSE_FILE)) {
+      return res.json({ licensed: false })
+    }
+    const data = JSON.parse(fs.readFileSync(LICENSE_FILE, 'utf-8'))
+    const { machineIdSync } = require('node-machine-id')
+    const currentId = machineIdSync()
+    if (data.status === 'licensed' && data.hardwareId === currentId) {
+      return res.json({ licensed: true })
+    }
+    return res.json({ licensed: false })
+  } catch {
+    return res.json({ licensed: false })
+  }
+})
 
 // --- ROOM MANAGEMENT ---
 app.get('/rooms', async (req, res) => {
@@ -512,6 +556,8 @@ app.get('/playlist', async (req, res) => {
   if (!roomId) return res.status(400).json({ success: false, error: 'room_id required' })
   try {
     const [playlist] = await pool.query('SELECT * FROM song_playlist WHERE room_id=?', [roomId])
+    console.log(playlist)
+
     res.json(playlist)
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
@@ -519,14 +565,39 @@ app.get('/playlist', async (req, res) => {
 })
 app.post('/playlist', async (req, res) => {
   const { room_id, id, title, artist, video_url, is_youtube } = req.body
+  const conn = await pool.getConnection()
   try {
-    await pool.query(
-      'INSERT INTO song_playlist (room_id, id, title, artist, video_url, is_youtube) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE title=VALUES(title), artist=VALUES(artist), video_url=VALUES(video_url), is_youtube=VALUES(is_youtube)',
+    await conn.beginTransaction()
+
+    // 1. Tambahkan ke playlist
+    await conn.query(
+      `INSERT INTO song_playlist (room_id, id, title, artist, video_url, is_youtube)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         title=VALUES(title),
+         artist=VALUES(artist),
+         video_url=VALUES(video_url),
+         is_youtube=VALUES(is_youtube)`,
       [room_id, id, title, artist, video_url, is_youtube]
     )
+
+    // 2. Jika lagu dari YouTube, tambahkan ke history
+    if (is_youtube) {
+      await conn.query(
+        `INSERT INTO song_youtube_history (room_id, id, title, artist, video_url, is_youtube, play_count)
+         VALUES (?, ?, ?, ?, ?, ?, 1)
+         ON DUPLICATE KEY UPDATE play_count = play_count + 1`,
+        [room_id, id, title, artist, video_url, is_youtube]
+      )
+    }
+
+    await conn.commit()
     res.json({ success: true })
   } catch (err) {
+    await conn.rollback()
     res.status(500).json({ success: false, error: err.message })
+  } finally {
+    conn.release()
   }
 })
 
@@ -672,6 +743,65 @@ app.put('/call-logs/:id', async (req, res) => {
     }
 
     res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/validate-admin', async (req, res) => {
+  try {
+    const { password } = req.body
+
+    if (!password) {
+      return res.status(400).json({ success: false, error: 'Password is required' })
+    }
+
+    const [sysParam] = await pool.query('SELECT param_value FROM sys_params WHERE param_key = "login_password"')
+    console.log('sysParam:', sysParam)
+
+    if (sysParam.length === 0 || sysParam[0].param_value !== password) {
+      return res.status(401).json({ success: false, error: 'Invalid password' })
+    }
+
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body
+
+    if (!username || !password) {
+      return res.json({ success: false, error: 'Username and password are required' })
+    }
+
+    const [sysParam] = await pool.query('SELECT param_value FROM sys_params WHERE param_key = "login_userid"')
+    if (sysParam.length === 0 || sysParam[0].param_value !== username) {
+      return res.json({ success: false, error: 'Invalid username or password' })
+    }
+
+    const [sysParamPassword] = await pool.query('SELECT param_value FROM sys_params WHERE param_key = "login_password"')
+    if (sysParamPassword.length === 0 || sysParamPassword[0].param_value !== password) {
+      return res.json({ success: false, error: 'Invalid password or username' })
+    }
+
+    res.json({ success: true })
+  } catch (err) {
+    res.json({ success: false, error: err.message })
+  }
+})
+
+app.get('/youtube-history', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, title, artist, video_url, play_count
+       FROM song_youtube_history
+       ORDER BY play_count DESC
+       LIMIT 20`
+    )
+    res.json({ success: true, data: rows })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
   }

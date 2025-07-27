@@ -1,3 +1,4 @@
+import { Settings } from 'lucide-react'
 import React, { useState, useRef, useEffect } from 'react'
 
 export const GlassCard = ({ className, children }) => {
@@ -309,7 +310,7 @@ export function useNotifStack() {
   return { notifs, showNotif, onClose }
 }
 
-export function CardRoom({ room, handleStartSession, handleStopSession }) {
+export function CardRoom({ room, handleStartSession, handleStopSession, handleDetail }) {
   const [duration, setDuration] = useState('00:00:00')
 
   useEffect(() => {
@@ -372,26 +373,39 @@ export function CardRoom({ room, handleStartSession, handleStopSession }) {
           </span>
         </div>
       </div>
-      <div className='flex gap-2 mt-4 md:mt-0'>
-        {room.status === 'Active' ? (
-          <button
-            className='bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-bold text-base'
-            onClick={() => handleStopSession(room.id)}>
-            Stop Session
-          </button>
-        ) : room.status === 'Inactive' ? (
-          <button
-            className='bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold text-base'
-            disabled>
-            Start Session
-          </button>
-        ) : (
-          <button
-            className='bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold text-base'
-            onClick={() => handleStartSession(room.id)}>
-            Start Session
-          </button>
-        )}
+      <div className='flex gap-2'>
+        <div className='flex gap-2 mt-4 md:mt-0'>
+          {room.status === 'Active' ? (
+            <button
+              className='bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-bold text-base'
+              onClick={() => handleStopSession(room.id)}>
+              Stop Session
+            </button>
+          ) : room.status === 'Inactive' ? (
+            <button
+              className='bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold text-base'
+              disabled>
+              Start Session
+            </button>
+          ) : (
+            <button
+              className='bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold text-base'
+              onClick={() => handleStartSession(room.id)}>
+              Start Session
+            </button>
+          )}
+        </div>
+        <div>
+          {room.status === 'Active' ? (
+            <button className='bg-[#0E9EEFEB] rounded-lg p-2' onClick={handleDetail}>
+              <Settings className='text-white' />
+            </button>
+          ) : (
+            <div className='bg-gray-700 rounded p-2'>
+              <Settings className='text-gray-400' />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

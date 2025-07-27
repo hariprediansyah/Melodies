@@ -9,7 +9,7 @@ export default function SearchResult({ keyword, onBack, onOpenYoutube }) {
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
-      const songs = await window.electronAPI.getData('songs')
+      const songs = await window.electronAPI.getSongs()
       const filtered = songs.filter(
         (song) =>
           song.title?.toLowerCase().includes(keyword.toLowerCase()) ||

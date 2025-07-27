@@ -29,6 +29,25 @@
   <body>
     <div id="youtube-player" style="display: none"></div>
     <video id="video-player" autoplay style="display: none"></video>
+    <video
+      id="idle-video-player"
+      autoplay
+      style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%)"></video>
+    <div
+      id="next-song-info"
+      style="
+        position: absolute;
+        top: 30px;
+        left: 0;
+        width: 100%;
+        text-align: center;
+        color: #fff;
+        font-size: 2.2rem;
+        font-family: sans-serif;
+        z-index: 100;
+        text-shadow: 2px 2px 8px #000;
+        display: blovk;
+      "></div>
     <script src="https://www.youtube.com/iframe_api"></script>
     <script src="./video.bundle.js"></script>
   </body>

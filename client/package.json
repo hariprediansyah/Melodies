@@ -10,6 +10,8 @@
     "build:react-prod": "webpack --mode production",
     "build:preload": "webpack --config webpack.preload.config.js",
     "dev": "concurrently \"npm run build:css\" \"npm run build:react\"",
+    "postinstall": "electron-builder install-app-deps",
+    "rebuild": "electron-rebuild -f -w naudiodon",
     "build": "npm run build:preload && npm run build:react-prod && electron-builder"
   },
   "keywords": [],

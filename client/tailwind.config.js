@@ -136,6 +136,15 @@ module.exports = {
         23: 'repeat(23, minmax(0, 1fr))',
         24: 'repeat(24, minmax(0, 1fr))'
       }
+      // keyframes: {
+      //   marquee: {
+      //     '0%': { transform: 'translateX(100%)' },
+      //     '100%': { transform: 'translateX(-100%)' } // teks keluar sepenuhnya
+      //   }
+      // },
+      // animation: {
+      //   marquee: 'marquee 5s linear infinite'
+      // }
     }
   },
   plugins: []

@@ -1,40 +1,88 @@
-import React, { useState } from 'react'
+import React, { use, useState } from 'react'
+import { callLogAPI, systemAPI } from '../services/api'
+import axios from 'axios'
 
 export default function Login({ onLogin }) {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState(null)
+  const [licensed, setLicensed] = useState(null)
+  const [licenseKey, setLicenseKey] = useState('')
+  const [licenseMsg, setLicenseMsg] = useState('')
 
-  const handleSubmit = (e) => {
+  // Cek status lisensi saat mount
+  React.useEffect(() => {
+    systemAPI
+      .licenseStatus()
+      .then((res) => setLicensed(res.licensed))
+      .catch(() => setLicensed(false))
+  }, [])
+
+  const handleLicenseActivate = async () => {
+    setLicenseMsg('')
+    try {
+      await systemAPI.activateLicense(licenseKey)
+      setLicenseMsg('Aktivasi berhasil! Server akan restart...')
+      setTimeout(() => window.location.reload(), 3000)
+    } catch (err) {
+      setLicenseMsg('Aktivasi gagal: ' + (err.response?.data?.message || err.message || 'Unknown error'))
+    }
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    // In a real app, you would validate credentials here
-    // For now, we'll just call the onLogin prop to navigate to the main menu
-    onLogin()
+
+    await callLogAPI
+      .login({ username, password })
+      .then((response) => {
+        if (response.success) {
+          onLogin()
+        } else {
+          setError(response.error || 'Login failed. Please try again.')
+        }
+      })
+      .catch((error) => {
+        console.error('Login failed:', error)
+        setError('An error occurred while logging in. Please try again later.')
+      })
+  }
+
+  if (licensed === null) return <div>Loading...</div>
+  if (!licensed) {
+    return (
+      <div className='flex flex-col items-center justify-center h-screen bg-[#181818] text-white'>
+        <div className='mb-8'>
+          <img src='logo_vertical.png' alt='Logo' width={200} className=' mb-2' />
+        </div>
+        <h2 className='text-2xl font-semibold mb-8'>Aktivasi Lisensi Server</h2>
+        <div className='w-full max-w-md px-6'>
+          <input
+            type='text'
+            placeholder='Masukkan License Key'
+            className='w-full py-3 px-2 bg-[#222222] rounded-md text-white mb-4 outline-none'
+            value={licenseKey}
+            onChange={(e) => setLicenseKey(e.target.value)}
+          />
+          <button
+            onClick={handleLicenseActivate}
+            className='w-full py-3 rounded-md font-semibold text-white mb-2'
+            style={{ background: 'linear-gradient(to right, #9be15d 0%, #00e3ae 50%, #4facfe 100%)' }}>
+            Aktivasi
+          </button>
+          {licenseMsg && <div className='text-center mt-2'>{licenseMsg}</div>}
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className='flex flex-col items-center justify-center h-screen bg-black text-white'>
+    <div className='flex flex-col items-center justify-center h-screen bg-[#181818] text-white'>
       {/* Logo */}
       <div className='mb-8'>
         <div className='flex flex-col items-center'>
           {/* House icon with gradient bars */}
-          <div className='w-24 h-20 mb-2 relative'>
-            <div className='absolute inset-0 flex justify-center'>
-              {[...Array(7)].map((_, i) => (
-                <div
-                  key={i}
-                  className='w-2 mx-0.5 rounded-t-md h-full'
-                  style={{
-                    background: `linear-gradient(to bottom, #4299e1 0%, #68d391 100%)`,
-                    height: `${70 + Math.sin(i * 0.8) * 30}%`
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-          <h1 className='text-2xl font-bold tracking-wider'>GREEN HOUSE</h1>
-          <p className='text-xs tracking-widest'>KARAOKE & LOUNGE</p>
-          <p className='text-xs mt-1 text-gray-400'>Elevate Your Night</p>
+          <img src='logo_vertical.png' alt='Logo' width={200} className=' mb-2' />
         </div>
       </div>
 
@@ -42,7 +90,9 @@ export default function Login({ onLogin }) {
       <h2 className='text-2xl font-semibold mb-8'>Log into Your Account</h2>
 
       <form onSubmit={handleSubmit} className='w-full max-w-md px-6'>
-        {/* Email Input */}
+        {/* Error Message */}
+        {error && <div className='text-red-500 mb-4 text-center'>{error}</div>}
+        {/* Username Input */}
         <div className='mb-6 relative'>
           <div className='flex items-center bg-[#222222] rounded-md'>
             <div className='pl-4 pr-2'>
@@ -61,11 +111,11 @@ export default function Login({ onLogin }) {
               </svg>
             </div>
             <input
-              type='email'
-              placeholder='Email'
+              type='text'
+              placeholder='Username'
               className='w-full py-3 px-2 bg-transparent outline-none'
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
             />
           </div>

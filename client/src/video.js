@@ -1,5 +1,6 @@
 const videoElement = document.getElementById('video-player')
 const youtubePlayerElement = document.getElementById('youtube-player')
+const idleVideoElement = document.getElementById('idle-video-player')
 let audioContext
 let source
 let splitter
@@ -8,6 +9,14 @@ let gainLeft
 let gainRight
 let ytPlayer
 let isYoutube = false
+let isPlaying = false
+
+let idleTimer
+let lastInteractionTime = Date.now()
+let isIdlePlaying = false
+const IDLE_TIMEOUT = 60 * 1000 // 1 menit
+const IDLE_VIDEO_PATH = 'idle.mp4' // pastikan ini ada di public path Electron
+let youtubeTimeInterval = null
 
 window.onYouTubeIframeAPIReady = function () {
   ytPlayer = new YT.Player('youtube-player', {
@@ -35,11 +44,26 @@ function onPlayerReady(event) {
 function onPlayerStateChange(event) {
   if (event.data === YT.PlayerState.CUED) {
     ytPlayer.playVideo()
+    isPlaying = true
+    resetIdleTimer()
   }
   if (event.data === YT.PlayerState.ENDED) {
+    isPlaying = false
+    resetIdleTimer()
     ytPlayer.g.style.display = 'none'
     videoElement.style.display = 'none'
     window.electronAPI.sendVideoEnded()
+    stopYoutubeTimeUpdater()
+  }
+  if (event.data === YT.PlayerState.PLAYING) {
+    isPlaying = true
+    resetIdleTimer()
+    startYoutubeTimeUpdater()
+  }
+
+  if (event.data === YT.PlayerState.PAUSED) {
+    isPlaying = false
+    resetIdleTimer()
   }
 }
 
@@ -66,10 +90,24 @@ window.electronAPI.onVideoControl((command) => {
   console.log('Received command:', command)
 
   switch (command.type) {
+    case 'NEXT_SONG_INFO': {
+      const infoDiv = document.getElementById('next-song-info')
+      console.log(command.title)
+      if (command.title) {
+        infoDiv.textContent = `Lagu selanjutnya: ${command.title}`
+      } else {
+        infoDiv.textContent = ``
+      }
+      break
+    }
     case 'LOAD':
+      stopYoutubeTimeUpdater()
+      stopIdleVideo()
+      isPlaying = true
       // Reset display dulu agar tidak ada yang tertinggal
       videoElement.style.display = 'none'
       youtubePlayerElement.style.display = 'none'
+      idleVideoElement.style.display = 'none'
       isYoutube = command.isYoutube
       if (command.isYoutube) {
         ytPlayer.g.style.display = 'block'
@@ -98,6 +136,7 @@ window.electronAPI.onVideoControl((command) => {
           ytPlayer.pauseVideo()
         }
         ytPlayer.g.style.display = 'none'
+        idleVideoElement.style.display = 'none'
         videoElement.style.display = 'block'
         if (!audioContext) {
           setupAudioContext()
@@ -105,10 +144,17 @@ window.electronAPI.onVideoControl((command) => {
         videoElement.src = command.src
         videoElement.load()
       }
+      // Sembunyikan info lagu selanjutnya saat lagu baru mulai
+      const infoDiv = document.getElementById('next-song-info')
+      if (infoDiv) infoDiv.style.display = 'none'
       break
     case 'PLAY':
+      isPlaying = true
+      stopIdleVideo()
+      resetIdleTimer()
       if (isYoutube) {
         if (ytPlayer && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() !== -1) {
+          ytPlayer.g.style.display = 'block'
           ytPlayer.playVideo()
         }
       } else {
@@ -116,9 +162,13 @@ window.electronAPI.onVideoControl((command) => {
         if (audioContext && audioContext.state === 'suspended') {
           audioContext.resume()
         }
+        videoElement.style.display = 'block'
       }
       break
     case 'PAUSE':
+      isPlaying = false
+      stopIdleVideo()
+      resetIdleTimer()
       if (isYoutube) {
         if (ytPlayer && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() !== -1) {
           ytPlayer.pauseVideo()
@@ -128,10 +178,17 @@ window.electronAPI.onVideoControl((command) => {
       }
       break
     case 'VOLUME':
+      ytPlayer.setVolume(command.level * 100)
+      videoElement.volume = command.level
+      // if (isYoutube) {
+      // } else {
+      // }
+      break
+    case 'SEEK':
       if (isYoutube) {
-        ytPlayer.setVolume(command.level * 100)
+        ytPlayer.seekTo(command.time)
       } else {
-        videoElement.volume = command.level
+        videoElement.currentTime = command.time
       }
       break
     case 'VOCAL':
@@ -151,7 +208,8 @@ videoElement.addEventListener('ended', () => {
   videoElement.style.display = 'none'
   ytPlayer.g.style.display = 'none'
   console.log('Video ended')
-
+  isPlaying = false
+  resetIdleTimer()
   window.electronAPI.sendVideoEnded()
 })
 
@@ -161,3 +219,70 @@ videoElement.addEventListener('timeupdate', () => {
     duration: videoElement.duration
   })
 })
+
+function startIdleTimer() {
+  if (idleTimer) clearInterval(idleTimer)
+  idleTimer = setInterval(() => {
+    const now = Date.now()
+    if (!isPlaying && !isIdlePlaying && now - lastInteractionTime > IDLE_TIMEOUT) {
+      playIdleVideo()
+    }
+  }, 5000) // check setiap 5 detik
+}
+
+function resetIdleTimer() {
+  lastInteractionTime = Date.now()
+  if (isIdlePlaying) stopIdleVideo()
+}
+
+function playIdleVideo() {
+  console.log('[Idle] Playing idle video...')
+  isIdlePlaying = true
+  youtubePlayerElement.style.display = 'none'
+  ytPlayer.g.style.display = 'none'
+  videoElement.style.display = 'none'
+  if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo()
+
+  idleVideoElement.style.display = 'block'
+  if (!audioContext) setupAudioContext()
+  idleVideoElement.src = IDLE_VIDEO_PATH
+  idleVideoElement.loop = true
+  idleVideoElement.play()
+}
+
+function stopIdleVideo() {
+  if (isIdlePlaying) {
+    console.log('[Idle] Stopping idle video...')
+    isIdlePlaying = false
+    // videoElement.pause()
+    // videoElement.loop = false
+    // videoElement.src = ''
+    idleVideoElement.style.display = 'none'
+  }
+}
+
+startIdleTimer()
+
+function startYoutubeTimeUpdater() {
+  if (youtubeTimeInterval) clearInterval(youtubeTimeInterval)
+  youtubeTimeInterval = setInterval(() => {
+    if (ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
+      const state = ytPlayer.getPlayerState()
+      if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) {
+        const currentTime = ytPlayer.getCurrentTime()
+        const duration = ytPlayer.getDuration()
+        window.electronAPI.sendToMain('video-time-update', {
+          currentTime,
+          duration
+        })
+      }
+    }
+  }, 500)
+}
+
+function stopYoutubeTimeUpdater() {
+  if (youtubeTimeInterval) {
+    clearInterval(youtubeTimeInterval)
+    youtubeTimeInterval = null
+  }
+}

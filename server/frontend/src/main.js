@@ -20,7 +20,6 @@ function createWindow() {
   })
 
   mainWindow.loadFile('public/index.html')
-  if (process.env.NODE_ENV === 'development') mainWindow.webContents.openDevTools()
 }
 
 app.whenReady().then(createWindow)

@@ -130,6 +130,7 @@ namespace ServiceSync
             try
             {
                 var url = $"{serverUrl}/rooms/force-shutdown/{roomId}";
+                Log($"Cek force shutdown di {url}");
                 var response = await _http.GetAsync(url);
                 response.EnsureSuccessStatusCode();
                 var json = await response.Content.ReadAsStringAsync();
@@ -175,6 +176,8 @@ namespace ServiceSync
                 Log("client_room_id belum di-set di sys_params. Sinkronisasi dilewati.");
                 return;
             }
+
+            Log($"Sebelum shutdown");
 
             var shouldShutdown = await CheckForceShutdown(serverUrl, roomId);
             if (shouldShutdown)

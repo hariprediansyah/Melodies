@@ -4,16 +4,32 @@ import CallingModal from './CallingModal'
 import Util from '../Util'
 import { useNotifStack } from '../Util'
 
-const Navbar = ({ onSearch, query, setQuery }) => {
+const Navbar = ({ onSearch, query, setQuery, mode }) => {
   const [roomName, setRoomName] = useState('')
   const [roomId, setRoomId] = useState(null)
   const [isCallingModalOpen, setIsCallingModalOpen] = useState(false)
   const [currentCallId, setCurrentCallId] = useState(null)
   const { notifs, showNotif, onClose } = useNotifStack()
 
-  const handleSearch = (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault()
     onSearch(query)
+  }
+
+  const handleSearch = (search) => {
+    if (search.includes('/exit/')) {
+      console.log(search.replace('/exit/', ''))
+
+      window.electronAPI.checkAdmin(search.replace('/exit/', '')).then((result) => {
+        if (result) {
+          window.electronAPI.closeApp()
+        }
+      })
+      return
+    }
+    if (mode != 'youtube') {
+      onSearch(search)
+    }
   }
 
   useEffect(() => {
@@ -65,7 +81,6 @@ const Navbar = ({ onSearch, query, setQuery }) => {
       showNotif('Call rejected. Please try again later.', 'error')
     }
   }
-
   return (
     <>
       <nav className='row-span-1 h-20 flex items-center justify-between px-8 z-50'>
@@ -75,14 +90,19 @@ const Navbar = ({ onSearch, query, setQuery }) => {
 
         <div className='flex-1 flex justify-center px-16'>
           <form
-            onSubmit={handleSearch}
+            onSubmit={handleSubmit}
             className='w-full max-w-md bg-black bg-opacity-20 rounded-full flex items-center px-4'>
             <Search className='text-gray-400' />
             <input
               type='text'
               placeholder='Search for songs or artists...'
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value)
+                if (mode != 'youtube') {
+                  handleSearch(e.target.value)
+                }
+              }}
               className='bg-transparent w-full h-12 px-4 text-white placeholder-gray-400 focus:outline-none bg-black bg-opacity-30'
             />
           </form>

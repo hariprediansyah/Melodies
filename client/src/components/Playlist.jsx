@@ -1,17 +1,17 @@
-import React from 'react'
+import React, { forwardRef } from 'react'
 import { Play } from 'lucide-react'
 
-const Playlist = ({ playlist, onSelectSong, selectedSong, onPlaySong, currentSong }) => {
+const Playlist = forwardRef(({ playlist, onSelectSong, selectedSong, onPlaySong, currentSong }, ref) => {
   return (
     <div className='row-span-9 grid grid-rows-12 bg-black bg-opacity-50 border border-white/10 p-6 rounded-lg h-full  text-white'>
       <h2 className='row-span-1 text-xl font-bold mb-4'>Playlist ({playlist.length})</h2>
-      <div className='row-span-11 space-y-2 overflow-y-scroll'>
+      <div ref={ref} className='row-span-11 space-y-2 overflow-y-scroll'>
         {playlist.length === 0 ? (
           <p className='text-gray-400 text-center mt-8'>Playlist is empty</p>
         ) : (
           playlist.map((song, index) => {
-            const isPlaying = currentSong && currentSong.id === song.id
-            const isSelected = selectedSong && selectedSong.id === song.id
+            const isPlaying = currentSong && currentSong.id == song.id
+            const isSelected = selectedSong && selectedSong.id == song.id
             return (
               <div
                 key={index}
@@ -33,6 +33,6 @@ const Playlist = ({ playlist, onSelectSong, selectedSong, onPlaySong, currentSon
       </div>
     </div>
   )
-}
+})
 
 export default Playlist

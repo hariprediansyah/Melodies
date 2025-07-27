@@ -6,13 +6,14 @@ import DateDisplay from '../components/DateDisplay'
 import { Youtube, ListMusic, ListPlus } from 'lucide-react'
 import Util from '../Util'
 
-export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuery }) {
+export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuery, mode, setMode }) {
   const [playlist, setPlaylist] = useState([])
   const [localSongs, setLocalSongs] = useState([])
   const [allSongs, setAllSongs] = useState([])
   const [youtubeSongs, setYoutubeSongs] = useState([])
-  const [isYoutubeMode, setIsYoutubeMode] = useState(false)
+  const [newSongs, setNewSongs] = useState([])
   const [config, setConfig] = useState(null)
+  const [youtubeRecommendations, setYoutubeRecommendations] = useState([])
 
   const [currentSongIndex, setCurrentSongIndex] = useState(-1)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -21,6 +22,7 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
   const songsPerPage = 10
 
   const playlistRef = useRef([])
+  const playlistScrollRef = useRef(null)
   const currentIndexRef = useRef(-1)
 
   useEffect(() => {
@@ -29,7 +31,8 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
   }, [playlist, currentSongIndex])
 
   const currentSong = currentSongIndex > -1 ? playlist[currentSongIndex] : null
-  const displayedSongs = isYoutubeMode ? youtubeSongs : localSongs
+  const displayedSongs = mode === 'youtube' ? youtubeSongs : mode === 'local' ? localSongs : newSongs
+  console.log('displayedSongs', displayedSongs)
 
   // Pagination logic
   const indexOfLastSong = currentPage * songsPerPage
@@ -45,8 +48,15 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
   // Fetch local songs and config on mount
   useEffect(() => {
     window.electronAPI.openVideoWindow().catch(console.error)
-    window.electronAPI.getData('songs').then(setAllSongs).catch(console.error)
+    window.electronAPI
+      .getSongs()
+      .then((songs) => {
+        setAllSongs(songs)
+        console.log('songs', songs)
+      })
+      .catch(console.error)
     window.electronAPI.getConfig().then(setConfig).catch(console.error)
+    window.electronAPI.youtubeRecommend().then(setYoutubeRecommendations).catch(console.error)
   }, [])
 
   // Fetch playlist dari server saat mount (lewat IPC)
@@ -72,10 +82,25 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
 
   // Tambahkan ke playlist dan sync ke server (lewat IPC)
   const handleNewEntry = () => {
-    if (selectedSong && !playlist.find((p) => p.id === selectedSong.id)) {
-      selectedSong.isYoutube = isYoutubeMode
+    // Display 20 newest songs
+    if (mode != 'new') {
+      setSearchQuery('')
+      setQuery('')
+      const sortedSongs = allSongs.sort(
+        (a, b) => new Date(b.created_at || b.timeInput) - new Date(a.created_at || a.timeInput)
+      )
+      setNewSongs(sortedSongs.slice(0, 20))
+      setMode('new')
+    }
+  }
+
+  const handleAddToPlaylist = (selectedSong) => {
+    if (!selectedSong) return
+    if (selectedSong && !playlist.find((p) => p.id == selectedSong.id)) {
+      selectedSong.isYoutube = mode === 'youtube'
       setPlaylist([...playlist, selectedSong])
       window.electronAPI.syncPlaylistAdd(selectedSong)
+      window.electronAPI.youtubeRecommend().then(setYoutubeRecommendations).catch(console.error)
     }
   }
 
@@ -108,14 +133,17 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
       if (currentSongIndex > -1 && playlist.length > 0) {
         const songId = playlist[currentSongIndex]?.id
         const newPlaylist = playlist.filter((_, i) => i !== currentSongIndex)
-        setPlaylist(newPlaylist)
         if (songId) window.electronAPI.syncPlaylistRemove(songId)
         if (newPlaylist.length > 0) {
           const nextIndex = currentSongIndex >= newPlaylist.length ? 0 : currentSongIndex
-          setCurrentSongIndex(nextIndex)
-          setSelectedSong(newPlaylist[nextIndex])
-          playSongAtIndex(nextIndex)
+          setPlaylist(newPlaylist)
+          setTimeout(() => {
+            setCurrentSongIndex(nextIndex)
+            setSelectedSong(newPlaylist[nextIndex])
+            playSongAtIndex(nextIndex, newPlaylist) // gunakan playlist terbaru
+          }, 0)
         } else {
+          setPlaylist(newPlaylist)
           setCurrentSongIndex(-1)
           setSelectedSong(null)
           setIsPlaying(false)
@@ -139,13 +167,13 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
   // Handle search query changes
   useEffect(() => {
     if (!searchQuery) {
-      if (isYoutubeMode) {
-        setYoutubeSongs([])
+      if (mode === 'youtube') {
+        setYoutubeSongs(youtubeRecommendations)
         return
       }
     }
 
-    if (isYoutubeMode) {
+    if (mode === 'youtube') {
       if (config?.youtubeApiKey) {
         window.electronAPI.searchYoutube(config.youtubeApiKey, searchQuery).then((results) => {
           if (!results.error) {
@@ -155,6 +183,16 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
           }
         })
       }
+    } else if (mode === 'new') {
+      const sortedSongs = allSongs.sort(
+        (a, b) => new Date(b.created_at || b.timeInput) - new Date(a.created_at || a.timeInput)
+      )
+      const filtered = sortedSongs.filter(
+        (song) =>
+          song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          song.artist.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      setNewSongs(filtered.slice(0, 20))
     } else {
       const filtered = allSongs.filter(
         (song) =>
@@ -163,19 +201,25 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
       )
       setLocalSongs(filtered)
     }
-  }, [searchQuery, isYoutubeMode, config, allSongs])
+  }, [searchQuery, mode, config, allSongs])
 
   const playSongAtIndex = useCallback(
-    async (index) => {
-      console.log(playlist)
-      if (index < 0 || index >= playlist.length) {
+    async (index, customPlaylist) => {
+      const pl = customPlaylist || playlist
+      console.log('playlist', pl, index)
+      if (index < 0 || index >= pl.length) {
         setIsPlaying(false)
         setCurrentSongIndex(-1)
+        // Sembunyikan info lagu selanjutnya jika tidak ada lagu berikutnya
+        window.electronAPI.sendVideoControl({ type: 'NEXT_SONG_INFO', title: '' })
         return
       }
       setCurrentSongIndex(index)
       setIsPlaying(true)
-      const song = playlist[index]
+      const song = pl[index]
+      // Kirim info lagu selanjutnya
+      const nextSong = pl[index + 1]
+      window.electronAPI.sendVideoControl({ type: 'NEXT_SONG_INFO', title: nextSong ? nextSong.title : '' })
       const storagePath = await window.electronAPI.getStorageBaseDir()
       let videoSrc
       if (song.isYoutube) {
@@ -183,8 +227,6 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
       } else {
         videoSrc = `file://${storagePath}/songs/${song.id}/song.mp4`
       }
-      console.log(videoSrc)
-
       window.electronAPI.sendVideoControl({ type: 'LOAD', src: videoSrc, isYoutube: !!song.isYoutube })
     },
     [playlist]
@@ -213,9 +255,14 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
   }, [currentSongIndex, playlist.length, playSongAtIndex])
 
   const handleTop = () => {
-    if (selectedSong && playlist.find((p) => p.id === selectedSong.id)) {
-      const otherSongs = playlist.filter((p) => p.id !== selectedSong.id)
-      setPlaylist([selectedSong, ...otherSongs])
+    console.log(playlistScrollRef.current)
+
+    if (playlist.length > 0) {
+      // Scroll to top
+      if (playlistScrollRef.current) {
+        console.log('Scrolled to top of playlist')
+        playlistScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+      }
     }
   }
 
@@ -226,10 +273,11 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
         <div className='col-span-2 grid grid-rows-15 gap-4 h-full overflow-hidden'>
           <div className='row-span-10'>
             <SongList
+              handleAddToPlaylist={handleAddToPlaylist}
               songs={currentSongs}
               onSelectSong={setSelectedSong}
               selectedSong={selectedSong}
-              isYoutubeMode={isYoutubeMode}
+              isYoutubeMode={mode === 'youtube'}
             />
           </div>
           <div className='row-span-1 flex justify-between items-center mt-4'>
@@ -251,28 +299,37 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
           </div>
           <div className='row-span-2 flex gap-4 mt-4'>
             <button
-              onClick={onBankMusic}
-              className='flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all'>
-              <ListMusic /> Bank Music
-            </button>
-            <button
               onClick={() => {
-                if (isYoutubeMode) {
+                if (mode === 'youtube' || mode === 'new') {
                   setLocalSongs(allSongs)
                   setSearchQuery('')
                   setQuery('')
                 }
-                setIsYoutubeMode(!isYoutubeMode)
+                setMode('local')
               }}
               className={`flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all ${
-                isYoutubeMode ? 'bg-red-600' : ''
+                mode === 'local' ? 'bg-green-700' : ''
+              }`}>
+              <ListMusic /> Bank Music
+            </button>
+            <button
+              onClick={() => {
+                if (mode != 'youtube') {
+                  setYoutubeSongs(youtubeRecommendations)
+                  setMode('youtube')
+                }
+              }}
+              className={`flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all ${
+                mode === 'youtube' ? 'bg-green-700' : ''
               }`}>
               <img src='youtube.png' width={30} />
               YouTube
             </button>
             <button
               onClick={handleNewEntry}
-              className='flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all'>
+              className={`flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all ${
+                mode === 'new' ? 'bg-green-700' : ''
+              }`}>
               <ListPlus /> New Entry
             </button>
           </div>
@@ -289,6 +346,7 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
         <div className='col-span-1 grid grid-rows-12 gap-4 h-full overflow-hidden'>
           <DateDisplay />
           <Playlist
+            ref={playlistScrollRef}
             playlist={playlist}
             onSelectSong={setSelectedSong}
             selectedSong={selectedSong}

@@ -2,9 +2,12 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // Database & File System
-  getData: (collection) => ipcRenderer.invoke('getData', collection),
+  getSongs: () => ipcRenderer.invoke('getSongs'),
   getStorageBaseDir: () => ipcRenderer.invoke('getStorageBaseDir'),
   getBannerImages: () => ipcRenderer.invoke('get-banner-images'),
+  fileExists: (filePath) => ipcRenderer.invoke('fileExists', filePath),
+  checkAdmin: (password) => ipcRenderer.invoke('checkAdmin', password),
+  closeApp: () => ipcRenderer.invoke('close-app'),
 
   // Room Status
   getRoomStatusByMac: () => ipcRenderer.invoke('room-status-by-mac'),
@@ -24,6 +27,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // YouTube Search
   searchYoutube: (apiKey, query) => ipcRenderer.invoke('search-youtube', { apiKey, query }),
+  youtubeRecommend: () => ipcRenderer.invoke('youtube-recommendations'),
 
   // Playlist Sync
   syncPlaylistAdd: (song) => ipcRenderer.invoke('sync-playlist-add', song),
@@ -38,5 +42,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Event listeners from main process
   onVideoTimeUpdate: (callback) => ipcRenderer.on('video-time-update', (event, ...args) => callback(...args)),
   onAddToPlaylist: (callback) => ipcRenderer.on('add-to-playlist', (event, ...args) => callback(...args)),
-  sendToMain: (channel, data) => ipcRenderer.send(channel, data)
+  sendToMain: (channel, data) => ipcRenderer.send(channel, data),
+
+  // License
+  isLicensed: () => ipcRenderer.invoke('license:isLicensed'),
+  activateLicense: (licenseKey) => ipcRenderer.invoke('license:activate', licenseKey),
+  getHardwareId: () => ipcRenderer.invoke('license:getHardwareId')
 })

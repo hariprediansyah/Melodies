@@ -22,20 +22,6 @@ const headerConfig = {
   user: { title: 'User', desc: 'User profile and management' }
 }
 
-function Layout({ children, menu, onMenuChange }) {
-  console.log('Layout component rendered with menu:', menu)
-  const header = headerConfig[menu] || headerConfig.dashboard
-  return (
-    <div className='flex h-screen bg-[#181818]'>
-      <Sidebar activeMenu={menu} onMenuChange={onMenuChange} />
-      <main className='flex-1 p-6 overflow-y-auto'>
-        <Header title={header.title} desc={header.desc} menu={menu} />
-        <div className='mt-6'>{children}</div>
-      </main>
-    </div>
-  )
-}
-
 export default function App() {
   console.log('App component rendered')
   // Authentication state
@@ -55,6 +41,18 @@ export default function App() {
   // Handle login
   const handleLogin = () => {
     setIsAuthenticated(true)
+  }
+
+  // Handle logout
+  const handleLogout = () => {
+    setIsAuthenticated(false)
+    setActiveMenu('dashboard')
+    setRoomPageMode('list')
+    setSongPageMode('list')
+    setBannerPageMode('list')
+    setEditRoomId(null)
+    setEditSongId(null)
+    setEditBannerId(null)
   }
 
   // Room Management handlers
@@ -97,6 +95,20 @@ export default function App() {
   const handleBannerBack = () => {
     setBannerPageMode('list')
     setEditBannerId(null)
+  }
+
+  function Layout({ children, menu, onMenuChange }) {
+    console.log('Layout component rendered with menu:', menu)
+    const header = headerConfig[menu] || headerConfig.dashboard
+    return (
+      <div className='flex h-screen bg-[#181818]'>
+        <Sidebar activeMenu={menu} onMenuChange={onMenuChange} logout={handleLogout} />
+        <main className='flex-1 p-6 overflow-y-auto'>
+          <Header title={header.title} desc={header.desc} menu={menu} />
+          <div className='mt-6'>{children}</div>
+        </main>
+      </div>
+    )
   }
 
   const renderContent = () => {

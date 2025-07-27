@@ -1,6 +1,10 @@
 import React from 'react'
 
-const SongList = ({ songs, onSelectSong, selectedSong, isYoutubeMode }) => {
+import { useEffect, useRef, useState } from 'react'
+import MarqueeText from './MarqueeText'
+import SongRow from './SongRow'
+
+const SongList = ({ handleAddToPlaylist, songs, onSelectSong, selectedSong, isYoutubeMode }) => {
   return isYoutubeMode ? (
     <div className='grid grid-rows-12 bg-black bg-opacity-50 border border-white/10 p-6 rounded-lg h-full text-white'>
       <div className='row-span-1 grid grid-cols-2 text-gray-400 font-bold mb-4 px-2'>
@@ -8,20 +12,16 @@ const SongList = ({ songs, onSelectSong, selectedSong, isYoutubeMode }) => {
         <div>Singer</div>
       </div>
       <div className='row-span-11 space-y-2 overflow-y-auto'>
-        {songs.map((song, index) => {
-          const isSelected = selectedSong && selectedSong.id === song.id
-          return (
-            <div
-              key={index}
-              className={`grid grid-cols-2 p-2 rounded-md cursor-pointer transition-all ${
-                isSelected ? 'bg-brand-green-light text-black' : 'hover:bg-white hover:bg-opacity-10'
-              }`}
-              onClick={() => onSelectSong(song)}>
-              <div>{song.title}</div>
-              <div>{song.singer || song.artist}</div>
-            </div>
-          )
-        })}
+        {songs.map((song, index) => (
+          <SongRow
+            key={index}
+            song={song}
+            isSelected={selectedSong?.id === song.id}
+            onSelectSong={onSelectSong}
+            handleAddToPlaylist={handleAddToPlaylist}
+            isYoutubeMode={isYoutubeMode}
+          />
+        ))}
       </div>
     </div>
   ) : (
@@ -32,21 +32,16 @@ const SongList = ({ songs, onSelectSong, selectedSong, isYoutubeMode }) => {
         <div>Duration</div>
       </div>
       <div className='row-span-11 space-y-2 overflow-y-auto'>
-        {songs.map((song, index) => {
-          const isSelected = selectedSong && selectedSong.id === song.id
-          return (
-            <div
-              key={index}
-              className={`grid grid-cols-3 p-2 rounded-md cursor-pointer transition-all ${
-                isSelected ? 'bg-brand-green-light text-black' : 'hover:bg-white hover:bg-opacity-10'
-              }`}
-              onClick={() => onSelectSong(song)}>
-              <div>{song.title}</div>
-              <div>{song.singer || song.artist}</div>
-              <div>{song.duration}</div>
-            </div>
-          )
-        })}
+        {songs.map((song, index) => (
+          <SongRow
+            key={index}
+            song={song}
+            isSelected={selectedSong?.id === song.id}
+            onSelectSong={onSelectSong}
+            handleAddToPlaylist={handleAddToPlaylist}
+            isYoutubeMode={isYoutubeMode}
+          />
+        ))}
       </div>
     </div>
   )

@@ -4,7 +4,7 @@ import { InputField } from '../components/Components'
 
 export default function AddEditRoom({ mode, roomId, onBack }) {
   const isEdit = mode === 'edit'
-  const [form, setForm] = useState({ name: '', description: '', status: 'Active', macAddress: '' })
+  const [form, setForm] = useState({ name: '', description: '', status: 'Inactive', macAddress: '' })
   const [loading, setLoading] = useState(isEdit)
   const [submitting, setSubmitting] = useState(false)
   const [macAddresses, setMacAddresses] = useState([])

@@ -24,21 +24,34 @@ app.MapGet("/", async (HttpContext context) =>
 
 app.MapPost("/updateserver", async (HttpContext context) =>
 {
-    var body = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(context.Request.Body);
-    if (body == null || !body.TryGetValue("server_ip", out var serverIp))
-        return Results.BadRequest("server_ip required");
+    try
+    {
+        using var reader = new StreamReader(context.Request.Body);
+        var rawBody = await reader.ReadToEndAsync();
+        syncService.Log($"Raw request body: {rawBody}");
 
-    body.TryGetValue("client_mac", out var clientMac);
-    body.TryGetValue("client_room_name", out var clientRoomName);
-    body.TryGetValue("client_room_id", out var clientRoomId);
+        var body = JsonSerializer.Deserialize<Dictionary<string, string>>(rawBody);
 
-    syncService.UpdateSysParam("server_ip", serverIp);
-    syncService.UpdateSysParam("client_mac", clientMac ?? "");
-    syncService.UpdateSysParam("client_room_name", clientRoomName ?? "");
-    syncService.UpdateSysParam("client_room_id", clientRoomId ?? "");
+        if (body == null || !body.TryGetValue("server_ip", out var serverIp))
+            return Results.BadRequest("server_ip required");
 
-    syncService.Log($"Update sys_param server_ip ke {serverIp}, dengan mac {clientMac}");
-    return Results.Ok(new { success = true });
+        body.TryGetValue("client_mac", out var clientMac);
+        body.TryGetValue("client_room_name", out var clientRoomName);
+        body.TryGetValue("client_room_id", out var clientRoomId);
+
+        syncService.UpdateSysParam("server_ip", serverIp);
+        syncService.UpdateSysParam("client_mac", clientMac ?? "");
+        syncService.UpdateSysParam("client_room_name", clientRoomName ?? "");
+        syncService.UpdateSysParam("client_room_id", clientRoomId ?? "");
+
+        syncService.Log($"Update sys_param server_ip ke {serverIp}, dengan mac {clientMac}");
+        return Results.Ok(new { success = true });
+    }
+    catch (Exception ex)
+    {
+        syncService.Log($"Error updating server: {ex.Message}");
+        return Results.Problem("Internal Server Error", statusCode: 500);
+    }
 });
 
 

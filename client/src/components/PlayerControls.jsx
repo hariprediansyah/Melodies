@@ -39,50 +39,63 @@ const PlayerControls = ({ isPlaying, onPlayPause, onNext, onPrev, currentSong })
   }
 
   return (
-    <div className='row-span-2 bg-black bg-opacity-50 border border-white/10 p-4 rounded-lg mt-4 flex items-center justify-between text-white'>
-      <div className='flex items-center gap-4'>
-        <button onClick={onPrev} className='hover:text-brand-green-light transition-colors'>
-          <SkipBack />
-        </button>
-        <button onClick={onPlayPause} className='bg-brand-green hover:bg-brand-green-light rounded-full p-3'>
-          {isPlaying ? <Pause size={28} /> : <Play size={28} />}
-        </button>
-        <button onClick={onNext} className='hover:text-brand-green-light transition-colors'>
-          <SkipForward />
-        </button>
-      </div>
-
-      <div className='text-lg font-semibold'>
-        <span>
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </span>
-      </div>
-
-      <div className='flex items-center gap-4'>
-        <span>Vocal</span>
-        <div
-          onClick={handleVocalToggle}
-          className={`w-14 h-7 rounded-full flex items-center cursor-pointer transition-colors ${
-            vocalOn ? 'bg-brand-green' : 'bg-gray-600'
-          }`}>
-          <span
-            className={`w-6 h-6 bg-white rounded-full transition-transform transform ${
-              vocalOn ? 'translate-x-7' : 'translate-x-1'
-            }`}
-          />
-        </div>
-        <button className='hover:text-brand-green-light transition-colors'>
-          <Volume2 />
-        </button>
+    <div className='row-span-2 grid grid-rows-3'>
+      <div className='row-span-1 gap-2 bg-black bg-opacity-50 border border-white/10 p-4 rounded-lg mt-4 flex items-center justify-between text-white'>
         <input
           type='range'
-          min='0'
-          max='1'
-          step='0.01'
-          value={volume}
-          onChange={(e) => setVolume(parseFloat(e.target.value))}
-          className='w-24'
+          min={0}
+          max={duration}
+          value={currentTime}
+          className='w-full bg-transparent focus:outline-none accent-[#b1c953]'
+          onChange={(e) => {
+            setCurrentTime(parseFloat(e.target.value))
+            window.electronAPI.sendVideoControl({ type: 'SEEK', time: e.target.value })
+          }}
         />
+        <div className='text-lg font-semibold flex gap-2 items-center'>
+          <p className='text-[#b1c953]'>{formatTime(currentTime)}</p> <p className='mx-2'>/</p>{' '}
+          <p>{formatTime(duration)}</p>
+        </div>
+      </div>
+      <div className='row-span-2 bg-black bg-opacity-50 border border-white/10 p-4 rounded-lg mt-4 flex items-center justify-between text-white'>
+        <div className='flex items-center gap-4'>
+          <button onClick={onPrev} className='hover:text-brand-green-light transition-colors'>
+            <SkipBack />
+          </button>
+          <button onClick={onPlayPause} className='bg-brand-green hover:bg-brand-green-light rounded-full p-2 gap-1'>
+            {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+          </button>
+          <button onClick={onNext} className='hover:text-brand-green-light transition-colors'>
+            <SkipForward />
+          </button>
+        </div>
+
+        <div className='flex items-center gap-4'>
+          <span>Vocal</span>
+          <div
+            onClick={handleVocalToggle}
+            className={`w-14 h-7 rounded-full flex items-center cursor-pointer transition-colors ${
+              vocalOn ? 'bg-[#b1c953]' : 'bg-gray-600'
+            }`}>
+            <span
+              className={`w-6 h-6 bg-white rounded-full transition-transform transform ${
+                vocalOn ? 'translate-x-7' : 'translate-x-1'
+              }`}
+            />
+          </div>
+          <div className=' transition-colors'>
+            <Volume2 />
+          </div>
+          <input
+            type='range'
+            min='0'
+            max='1'
+            step='0.01'
+            value={volume}
+            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            className='w-24 accent-[#b1c953]'
+          />
+        </div>
       </div>
     </div>
   )
