@@ -34,19 +34,38 @@
       autoplay
       style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%)"></video>
     <div
+      id="idle-carousel"
+      style="
+        display: none;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 5;
+        width: 100%;
+        height: 100%;
+        background-color: black;
+        overflow: hidden;
+      ">
+      <img id="carousel-image" style="width: 100%; height: 100%; object-fit: contain" />
+    </div>
+
+    <div
       id="next-song-info"
       style="
         position: absolute;
         top: 30px;
-        left: 0;
+        right: 0px;
         width: 100%;
         text-align: center;
         color: #fff;
         font-size: 2.2rem;
         font-family: sans-serif;
         z-index: 100;
+        padding-right: 20px;
+        text-align: end;
         text-shadow: 2px 2px 8px #000;
-        display: blovk;
+        display: block;
       "></div>
     <script src="https://www.youtube.com/iframe_api"></script>
     <script src="./video.bundle.js"></script>

@@ -108,7 +108,7 @@ const Navbar = ({ onSearch, query, setQuery, mode }) => {
           </form>
         </div>
 
-        <div className='flex items-center gap-6'>
+        <div className='flex items-center gap-6 text-xl'>
           <button className='text-gray-300 hover:text-white transition-colors' onClick={handleCallClick}>
             <PhoneCall size={24} />
           </button>

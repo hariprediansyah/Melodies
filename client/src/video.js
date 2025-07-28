@@ -17,6 +17,7 @@ let isIdlePlaying = false
 const IDLE_TIMEOUT = 60 * 1000 // 1 menit
 const IDLE_VIDEO_PATH = 'idle.mp4' // pastikan ini ada di public path Electron
 let youtubeTimeInterval = null
+let nextSongTitle = ''
 
 window.onYouTubeIframeAPIReady = function () {
   ytPlayer = new YT.Player('youtube-player', {
@@ -56,6 +57,7 @@ function onPlayerStateChange(event) {
     stopYoutubeTimeUpdater()
   }
   if (event.data === YT.PlayerState.PLAYING) {
+    console.log('YouTube video is playing')
     isPlaying = true
     resetIdleTimer()
     startYoutubeTimeUpdater()
@@ -86,18 +88,27 @@ function setupAudioContext() {
   merger.connect(audioContext.destination)
 }
 
+function setNextSong(title) {
+  console.log(`Setting next song title: ${title}`)
+
+  const infoDiv = document.getElementById('next-song-info')
+  if (title) {
+    infoDiv.textContent = `Lagu selanjutnya: ${title}`
+  } else {
+    infoDiv.textContent = ``
+  }
+}
+
 window.electronAPI.onVideoControl((command) => {
   console.log('Received command:', command)
 
   switch (command.type) {
+    case 'SET_NEXT_SONG_TITLE':
+      console.log('Setting next song title frin command:', command.title)
+      nextSongTitle = command.title || ''
+      break
     case 'NEXT_SONG_INFO': {
-      const infoDiv = document.getElementById('next-song-info')
-      console.log(command.title)
-      if (command.title) {
-        infoDiv.textContent = `Lagu selanjutnya: ${command.title}`
-      } else {
-        infoDiv.textContent = ``
-      }
+      setNextSong(command.title)
       break
     }
     case 'LOAD':
@@ -144,9 +155,6 @@ window.electronAPI.onVideoControl((command) => {
         videoElement.src = command.src
         videoElement.load()
       }
-      // Sembunyikan info lagu selanjutnya saat lagu baru mulai
-      const infoDiv = document.getElementById('next-song-info')
-      if (infoDiv) infoDiv.style.display = 'none'
       break
     case 'PLAY':
       isPlaying = true
@@ -214,10 +222,26 @@ videoElement.addEventListener('ended', () => {
 })
 
 videoElement.addEventListener('timeupdate', () => {
+  console.log('timeupdate event fired')
+
   window.electronAPI.sendToMain('video-time-update', {
     currentTime: videoElement.currentTime,
     duration: videoElement.duration
   })
+
+  // Notifikasi next song 30 detik sebelum habis
+  console.log(
+    `Current time: ${videoElement.currentTime}, Duration: ${videoElement.duration}, Next song title: ${nextSongTitle}`
+  )
+
+  if (
+    videoElement.duration &&
+    (videoElement.duration <= 30 || videoElement.duration - videoElement.currentTime <= 30)
+  ) {
+    setNextSong(nextSongTitle)
+  } else {
+    setNextSong('')
+  }
 })
 
 function startIdleTimer() {
@@ -226,6 +250,7 @@ function startIdleTimer() {
     const now = Date.now()
     if (!isPlaying && !isIdlePlaying && now - lastInteractionTime > IDLE_TIMEOUT) {
       playIdleVideo()
+      infoDiv.textContent = ``
     }
   }, 5000) // check setiap 5 detik
 }
@@ -275,6 +300,12 @@ function startYoutubeTimeUpdater() {
           currentTime,
           duration
         })
+
+        if (duration && (duration <= 30 || duration - currentTime <= 30)) {
+          setNextSong(nextSongTitle)
+        } else {
+          setNextSong('')
+        }
       }
     }
   }, 500)

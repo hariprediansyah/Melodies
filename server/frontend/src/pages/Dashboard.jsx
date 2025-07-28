@@ -14,6 +14,7 @@ export default function Dashboard({ onDetail }) {
   const [currentTime, setCurrentTime] = useState('')
   const [totalSong, setTotalSong] = useState(0)
   const [search, setSearch] = useState('')
+  const [confirmAction, setConfirmAction] = useState(null)
 
   useEffect(() => {
     fetchRooms()
@@ -308,13 +309,35 @@ export default function Dashboard({ onDetail }) {
               <div className='font-bold text-white mb-2'>Shutdown All Room</div>
               <button
                 className='bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg text-lg w-full'
-                onClick={handleShutdownAll}>
+                onClick={() => setConfirmAction('shutdown')}>
                 Shutdown
               </button>
             </div>
           </div>
         </div>
       </div>
+      {confirmAction && (
+        <div className='fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50'>
+          <div className='bg-[#1f1f1f] rounded-lg p-6 shadow-lg'>
+            <p className='mb-4 text-white'>Apakah Anda yakin ingin mematikan semua room?</p>
+            <div className='flex justify-end gap-2'>
+              <button
+                className='px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400'
+                onClick={() => setConfirmAction(null)}>
+                Cancel
+              </button>
+              <button
+                className='px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700'
+                onClick={() => {
+                  handleShutdownAll()
+                  setConfirmAction(null)
+                }}>
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

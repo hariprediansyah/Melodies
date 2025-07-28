@@ -16,13 +16,12 @@ const SongRow = ({ song, isSelected, onSelectSong, handleAddToPlaylist, isYoutub
           handleAddToPlaylist(song)
         }
       }}
-      className={`grid ${isYoutubeMode ? 'grid-cols-2' : 'grid-cols-3'} p-2 rounded-md cursor-pointer transition-all ${
+      className={`grid grid-cols-3 p-2 rounded-md cursor-pointer transition-all ${
         isSelected ? 'bg-brand-green-light text-black' : 'hover:bg-white hover:bg-opacity-10'
       }`}
       onClick={() => onSelectSong(song)}>
-      <MarqueeText text={song.title} isActive={isSelected || isHovered} />
+      <MarqueeText text={song.title} isActive={isSelected || isHovered} className={'col-span-2'} />
       <div className='truncate'>{song.singer || song.artist}</div>
-      {!isYoutubeMode && <div className='truncate'>{song.duration}</div>}
     </div>
   )
 }

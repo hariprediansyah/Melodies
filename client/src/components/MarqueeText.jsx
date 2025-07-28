@@ -2,7 +2,7 @@ import React from 'react'
 
 import { useEffect, useRef, useState } from 'react'
 
-const MarqueeText = ({ text, isActive }) => {
+const MarqueeText = ({ text, isActive, className }) => {
   const containerRef = useRef(null)
   const textRef = useRef(null)
   const [duration, setDuration] = useState('10s')
@@ -18,7 +18,7 @@ const MarqueeText = ({ text, isActive }) => {
   }, [text, isActive])
 
   return (
-    <div ref={containerRef} className='relative overflow-hidden'>
+    <div ref={containerRef} className={`relative overflow-hidden ${className || ''}`}>
       <div
         ref={textRef}
         className={`whitespace-nowrap ${isActive ? 'inline-block' : 'truncate'}`}

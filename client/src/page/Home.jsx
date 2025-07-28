@@ -211,15 +211,16 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
         setIsPlaying(false)
         setCurrentSongIndex(-1)
         // Sembunyikan info lagu selanjutnya jika tidak ada lagu berikutnya
-        window.electronAPI.sendVideoControl({ type: 'NEXT_SONG_INFO', title: '' })
+        window.electronAPI.sendVideoControl({ type: 'SET_NEXT_SONG_TITLE', title: '' })
         return
       }
       setCurrentSongIndex(index)
       setIsPlaying(true)
       const song = pl[index]
       // Kirim info lagu selanjutnya
-      const nextSong = pl[index + 1]
-      window.electronAPI.sendVideoControl({ type: 'NEXT_SONG_INFO', title: nextSong ? nextSong.title : '' })
+      const nextIndex = (index + 1) % pl.length
+      const nextSong = pl[nextIndex]
+      window.electronAPI.sendVideoControl({ type: 'SET_NEXT_SONG_TITLE', title: nextSong ? nextSong.title : '' })
       const storagePath = await window.electronAPI.getStorageBaseDir()
       let videoSrc
       if (song.isYoutube) {
@@ -297,7 +298,7 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
               Next
             </button>
           </div>
-          <div className='row-span-2 flex gap-4 mt-4'>
+          <div className='row-span-2 flex gap-4 mt-4 text-xl'>
             <button
               onClick={() => {
                 if (mode === 'youtube' || mode === 'new') {
@@ -353,7 +354,7 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
             onPlaySong={(song) => playSongAtIndex(playlist.indexOf(song))}
             currentSong={currentSong}
           />
-          <div className='row-span-2 flex justify-between gap-4 mt-4'>
+          <div className='row-span-2 flex justify-between gap-4 mt-4 text-xl'>
             <button
               onClick={handleTop}
               className='flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all'>

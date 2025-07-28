@@ -160,6 +160,7 @@ ipcMain.handle('close-video-window', () => {
   if (videoWindow) videoWindow.close()
 })
 ipcMain.handle('send-video-control', (_, command) => {
+  console.log('Sending video control command:', command)
   if (videoWindow) {
     console.log(command)
     videoWindow.webContents.send('video-control', command)
