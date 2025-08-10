@@ -47,7 +47,7 @@ namespace ServiceSync
 
             var commands = new[]
             {
-            "CREATE TABLE IF NOT EXISTS songs (id INTEGER PRIMARY KEY, title TEXT, artist TEXT, genre TEXT, album TEXT, release_date TEXT, duration TEXT, play_count INTEGER, created_at TEXT, updated_at TEXT, cover_updated_at TEXT, song_updated_at TEXT)",
+            "CREATE TABLE IF NOT EXISTS songs (id INTEGER PRIMARY KEY, title TEXT, artist TEXT, genre TEXT, album TEXT, release_date TEXT, duration TEXT, play_count INTEGER, created_at TEXT, updated_at TEXT, cover_updated_at TEXT, song_updated_at TEXT, vocal TEXT)",
             "CREATE TABLE IF NOT EXISTS playlist (id INTEGER PRIMARY KEY AUTOINCREMENT, song_id INTEGER)",
             "CREATE TABLE IF NOT EXISTS banners (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, created_at TEXT, updated_at TEXT, banner_updated_at TEXT)",
             "CREATE TABLE IF NOT EXISTS carousels (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT)",
@@ -196,10 +196,10 @@ namespace ServiceSync
                 var banners = await GetJsonAsync<List<Dictionary<string, object>>>($"{serverUrl}/banners");
                 var carousels = await GetJsonAsync<List<Dictionary<string, object>>>($"{serverUrl}/carousels/files");
 
-                SyncTable("songs", songs, new[] { "id", "title", "artist", "genre", "album", "release_date", "duration", "play_count", "created_at", "updated_at", "cover_updated_at", "song_updated_at" });
+                SyncTable("songs", songs, new[] { "id", "title", "artist", "genre", "album", "release_date", "duration", "play_count", "created_at", "updated_at", "cover_updated_at", "song_updated_at", "vocal" });
                 SyncTable("banners", banners, new[] { "id", "title", "description", "created_at", "updated_at", "banner_updated_at" });
                 SyncCarousels(carousels, serverUrl);
-                SyncSongsFiles(songs, serverUrl);
+                //SyncSongsFiles(songs, serverUrl);
                 SyncBannersFiles(banners, serverUrl);
 
                 Log("Sinkronisasi selesai.");
@@ -273,48 +273,48 @@ namespace ServiceSync
             }
         }
 
-        private void SyncSongsFiles(List<Dictionary<string, object>> songs, string serverUrl)
-        {
-            var songsBasePath = Path.Combine(_basePath, "Storage", "songs");
+        // private void SyncSongsFiles(List<Dictionary<string, object>> songs, string serverUrl)
+        // {
+        //     var songsBasePath = Path.Combine(_basePath, "Storage", "songs");
 
-            var localSongs = new HashSet<string>(
-                Directory.GetDirectories(songsBasePath).Select(d => Path.GetFileName(d)));
+        //     var localSongs = new HashSet<string>(
+        //         Directory.GetDirectories(songsBasePath).Select(d => Path.GetFileName(d)));
 
-            foreach (var song in songs)
-            {
-                var id = song["id"].ToString();
-                var folder = Path.Combine(songsBasePath, id);
-                Directory.CreateDirectory(folder);
+        //     foreach (var song in songs)
+        //     {
+        //         var id = song["id"].ToString();
+        //         var folder = Path.Combine(songsBasePath, id);
+        //         Directory.CreateDirectory(folder);
 
-                localSongs.Remove(id); // akan dihapus nanti jika tidak ada di server
+        //         localSongs.Remove(id); // akan dihapus nanti jika tidak ada di server
 
-                // Cover
-                var localCover = Path.Combine(folder, "cover.jpg");
-                if (NeedsDownload(song, "cover_updated_at", localCover))
-                {
-                    var url = $"{serverUrl}/files/song/{id}/cover.jpg";
-                    DownloadFile(url, localCover);
-                    Log($"Download cover song {id}");
-                }
+        //         // Cover
+        //         var localCover = Path.Combine(folder, "cover.jpg");
+        //         if (NeedsDownload(song, "cover_updated_at", localCover))
+        //         {
+        //             var url = $"{serverUrl}/files/song/{id}/cover.jpg";
+        //             DownloadFile(url, localCover);
+        //             Log($"Download cover song {id}");
+        //         }
 
-                // Song file
-                var localMp4 = Path.Combine(folder, "song.mp4");
-                if (NeedsDownload(song, "song_updated_at", localMp4))
-                {
-                    var url = $"{serverUrl}/files/song/{id}/song.mp4";
-                    DownloadFile(url, localMp4);
-                    Log($"Download song file {id}");
-                }
-            }
+        //         // Song file
+        //         var localMp4 = Path.Combine(folder, "song.mp4");
+        //         if (NeedsDownload(song, "song_updated_at", localMp4))
+        //         {
+        //             var url = $"{serverUrl}/files/song/{id}/song.mp4";
+        //             DownloadFile(url, localMp4);
+        //             Log($"Download song file {id}");
+        //         }
+        //     }
 
-            // Hapus folder yang tidak ada di server
-            foreach (var id in localSongs)
-            {
-                var path = Path.Combine(songsBasePath, id);
-                Directory.Delete(path, true);
-                Log($"Hapus folder song {id}");
-            }
-        }
+        //     // Hapus folder yang tidak ada di server
+        //     foreach (var id in localSongs)
+        //     {
+        //         var path = Path.Combine(songsBasePath, id);
+        //         Directory.Delete(path, true);
+        //         Log($"Hapus folder song {id}");
+        //     }
+        // }
 
         private void SyncBannersFiles(List<Dictionary<string, object>> banners, string serverUrl)
         {

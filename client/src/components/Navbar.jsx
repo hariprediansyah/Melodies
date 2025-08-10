@@ -17,16 +17,6 @@ const Navbar = ({ onSearch, query, setQuery, mode }) => {
   }
 
   const handleSearch = (search) => {
-    if (search.includes('/exit/')) {
-      console.log(search.replace('/exit/', ''))
-
-      window.electronAPI.checkAdmin(search.replace('/exit/', '')).then((result) => {
-        if (result) {
-          window.electronAPI.closeApp()
-        }
-      })
-      return
-    }
     if (mode != 'youtube') {
       onSearch(search)
     }
@@ -85,7 +75,7 @@ const Navbar = ({ onSearch, query, setQuery, mode }) => {
     <>
       <nav className='row-span-1 h-20 flex items-center justify-between px-8 z-50'>
         <div className='flex items-center gap-4'>
-          <img src='logo_horizontal.png' width={400} alt='Logo' />
+          <img src='logo_horizontal.png' width={250} alt='Logo' />
         </div>
 
         <div className='flex-1 flex justify-center px-16'>
@@ -98,7 +88,20 @@ const Navbar = ({ onSearch, query, setQuery, mode }) => {
               placeholder='Search for songs or artists...'
               value={query}
               onChange={(e) => {
-                setQuery(e.target.value)
+                const search = e.target.value
+                setQuery(search)
+                if (search.includes('/exit/')) {
+                  console.log(search.replace('/exit/', ''))
+
+                  window.electronAPI.checkAdmin(search.replace('/exit/', '')).then((result) => {
+                    if (result) {
+                      window.electronAPI.closeVideoWindow()
+                      window.electronAPI.closeKeyBlocker()
+                      window.electronAPI.closeApp()
+                    }
+                  })
+                  return
+                }
                 if (mode != 'youtube') {
                   handleSearch(e.target.value)
                 }
@@ -108,11 +111,11 @@ const Navbar = ({ onSearch, query, setQuery, mode }) => {
           </form>
         </div>
 
-        <div className='flex items-center gap-6 text-xl'>
+        <div className='flex items-center gap-6 text-2xl'>
           <button className='text-gray-300 hover:text-white transition-colors' onClick={handleCallClick}>
             <PhoneCall size={24} />
           </button>
-          <div className='flex items-center gap-2 text-lg'>
+          <div className='flex items-center gap-2 text-xl'>
             <Music size={24} />
             <span>{roomName}</span>
           </div>
@@ -140,7 +143,7 @@ const Navbar = ({ onSearch, query, setQuery, mode }) => {
               </svg>
             )}
             <span>{notif.message}</span>
-            <button onClick={() => onClose(notif.id)} className='ml-2 text-white/70 hover:text-white text-lg'>
+            <button onClick={() => onClose(notif.id)} className='ml-2 text-white/70 hover:text-white text-xl'>
               &times;
             </button>
           </div>

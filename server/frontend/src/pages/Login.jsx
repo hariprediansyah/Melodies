@@ -22,7 +22,11 @@ export default function Login({ onLogin }) {
   const handleLicenseActivate = async () => {
     setLicenseMsg('')
     try {
-      await systemAPI.activateLicense(licenseKey)
+      const response = await systemAPI.activateLicense(licenseKey)
+      if (!response.success) {
+        setLicenseMsg('Aktivasi gagal: ' + (response.message || 'Unknown error'))
+        return
+      }
       setLicenseMsg('Aktivasi berhasil! Server akan restart...')
       setTimeout(() => window.location.reload(), 3000)
     } catch (err) {

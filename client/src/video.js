@@ -14,10 +14,16 @@ let isPlaying = false
 let idleTimer
 let lastInteractionTime = Date.now()
 let isIdlePlaying = false
-const IDLE_TIMEOUT = 60 * 1000 // 1 menit
+const IDLE_TIMEOUT = 60 * 5 * 1000 // 5 menit
 const IDLE_VIDEO_PATH = 'idle.mp4' // pastikan ini ada di public path Electron
 let youtubeTimeInterval = null
 let nextSongTitle = ''
+let bannerImages = []
+let bannerInterval = null
+let currentBannerIndex = 0
+let isStandby = false
+
+console.log('video.js loaded')
 
 window.onYouTubeIframeAPIReady = function () {
   ytPlayer = new YT.Player('youtube-player', {
@@ -38,8 +44,11 @@ window.onYouTubeIframeAPIReady = function () {
 
 function onPlayerReady(event) {
   // Player is ready
+  window.electronAPI.sendToMain('youtube-api-ready')
   youtubePlayerElement.style.display = 'block'
   console.log(youtubePlayerElement)
+  console.log('YouTube API is ready')
+  ytPlayer.setVolume(90)
 }
 
 function onPlayerStateChange(event) {
@@ -99,6 +108,89 @@ function setNextSong(title) {
   }
 }
 
+window.electronAPI.onUserActive(() => {
+  if (!isStandby) {
+    resetIdleTimer()
+    if (isIdlePlaying) {
+      stopIdleVideo()
+    }
+  }
+})
+
+window.electronAPI.onStandby(() => {
+  isStandby = true
+})
+
+window.electronAPI.onActive(() => {
+  isStandby = false
+})
+
+window.electronAPI.onInactive(() => {
+  if (!isStandby) {
+    resetIdleTimer()
+    if (isIdlePlaying) {
+      stopIdleVideo()
+    }
+  }
+
+  if (isPlaying) {
+    isPlaying = false
+    resetIdleTimer()
+    if (isYoutube) {
+      if (ytPlayer && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() !== -1) {
+        ytPlayer.pauseVideo()
+      }
+      ytPlayer.g.style.display = 'none'
+    } else {
+      videoElement.pause()
+      videoElement.src = ''
+    }
+    videoElement.style.display = 'none'
+    youtubePlayerElement.style.display = 'none'
+  }
+
+  videoElement.style.display = 'none'
+  if (ytPlayer) {
+    ytPlayer.g.style.display = 'none'
+  }
+  isPlaying = false
+  resetIdleTimer()
+})
+
+async function ensureSongDownloaded(songId) {
+  try {
+    const baseDir = await window.electronAPI.getStorageBaseDir()
+    const serverUrl = await window.electronAPI.getServerUrl()
+    console.log(`Base dir: ${baseDir}, Server URL: ${serverUrl}`)
+    window.electronAPI.logToFile(`Base dir: ${baseDir}, Server URL: ${serverUrl}`)
+
+    const filePath = `${baseDir}/songs/${songId}/song.mp4`
+
+    const exists = await window.electronAPI.fileExists(filePath)
+    if (exists) return filePath
+
+    // File belum ada, download dari server
+    const url = `${serverUrl}/songs/download/${songId}`
+    const res = await fetch(url)
+
+    if (!res.ok) throw new Error(res.statusText)
+    window.electronAPI.logToFile(`Downloaded song ${songId}`)
+
+    const arrayBuffer = await res.arrayBuffer()
+    const blob = new Blob([arrayBuffer], { type: 'video/mp4' })
+    const buffer = await blob.arrayBuffer()
+
+    const success = await window.electronAPI.saveFile(filePath, buffer)
+    if (!success) throw new Error('Failed to save song.')
+
+    return filePath
+  } catch (err) {
+    console.error('Failed to download song:', err)
+    window.electronAPI.logToFile(`Failed to download song ${songId}: ${err.message}`)
+    throw err
+  }
+}
+
 window.electronAPI.onVideoControl((command) => {
   console.log('Received command:', command)
 
@@ -112,6 +204,21 @@ window.electronAPI.onVideoControl((command) => {
       break
     }
     case 'LOAD':
+      if (isPlaying) {
+        isPlaying = false
+        resetIdleTimer()
+        if (isYoutube) {
+          if (ytPlayer && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() !== -1) {
+            ytPlayer.pauseVideo()
+          }
+          ytPlayer.g.style.display = 'none'
+        } else {
+          videoElement.pause()
+          videoElement.src = ''
+        }
+        videoElement.style.display = 'none'
+        youtubePlayerElement.style.display = 'none'
+      }
       stopYoutubeTimeUpdater()
       stopIdleVideo()
       isPlaying = true
@@ -143,17 +250,32 @@ window.electronAPI.onVideoControl((command) => {
           }
         }
       } else {
-        if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
-          ytPlayer.pauseVideo()
-        }
-        ytPlayer.g.style.display = 'none'
+        // if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
+        //   ytPlayer.pauseVideo()
+        // }
+        // if (ytPlayer) ytPlayer.g.style.display = 'none'
+        // idleVideoElement.style.display = 'none'
+        // videoElement.style.display = 'block'
+        // if (!audioContext) {
+        //   setupAudioContext()
+        // }
+        // videoElement.src = command.src
+        // videoElement.load()
+        if (ytPlayer) ytPlayer.g.style.display = 'none'
         idleVideoElement.style.display = 'none'
         videoElement.style.display = 'block'
-        if (!audioContext) {
-          setupAudioContext()
-        }
-        videoElement.src = command.src
-        videoElement.load()
+        if (!audioContext) setupAudioContext()
+
+        const songId = command.id
+
+        ensureSongDownloaded(songId)
+          .then((localPath) => {
+            videoElement.src = `file://${localPath}`
+            videoElement.load()
+          })
+          .catch((err) => {
+            console.error('Failed to load song:', err)
+          })
       }
       break
     case 'PLAY':
@@ -162,6 +284,8 @@ window.electronAPI.onVideoControl((command) => {
       resetIdleTimer()
       if (isYoutube) {
         if (ytPlayer && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() !== -1) {
+          console.log('ytplayer play', ytPlayer)
+
           ytPlayer.g.style.display = 'block'
           ytPlayer.playVideo()
         }
@@ -186,7 +310,9 @@ window.electronAPI.onVideoControl((command) => {
       }
       break
     case 'VOLUME':
-      ytPlayer.setVolume(command.level * 100)
+      if (ytPlayer) {
+        ytPlayer.setVolume(command.level * 100)
+      }
       videoElement.volume = command.level
       // if (isYoutube) {
       // } else {
@@ -201,20 +327,57 @@ window.electronAPI.onVideoControl((command) => {
       break
     case 'VOCAL':
       if (!audioContext || isYoutube) return
-      if (command.mode === 'off') {
-        gainRight.disconnect()
-        gainLeft.connect(merger, 0, 1)
+
+      // Reset koneksi semua dulu
+      gainLeft.disconnect()
+      gainRight.disconnect()
+
+      const vocalPos = command.vocal || 'Left' // 'left' atau 'right'
+      const mode = command.mode // 'off' atau 'on'
+
+      if (mode === 'off') {
+        if (vocalPos === 'Left') {
+          // Mute kanal kiri, copy kanan ke kiri dan kanan
+          gainRight.connect(merger, 0, 0)
+          gainRight.connect(merger, 0, 1)
+        } else if (vocalPos === 'Right') {
+          // Mute kanal kanan, copy kiri ke kiri dan kanan
+          gainLeft.connect(merger, 0, 0)
+          gainLeft.connect(merger, 0, 1)
+        } else {
+          // fallback: mono kiri
+          gainLeft.connect(merger, 0, 0)
+          gainLeft.connect(merger, 0, 1)
+        }
       } else {
-        gainLeft.disconnect(merger, 0, 1)
+        // mode on: normal stereo
+        gainLeft.connect(merger, 0, 0)
         gainRight.connect(merger, 0, 1)
       }
+      break
+    case 'STOP':
+      isPlaying = false
+      resetIdleTimer()
+      if (isYoutube) {
+        if (ytPlayer && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() !== -1) {
+          ytPlayer.pauseVideo()
+        }
+        ytPlayer.g.style.display = 'none'
+      } else {
+        videoElement.pause()
+        videoElement.src = ''
+      }
+      videoElement.style.display = 'none'
+      youtubePlayerElement.style.display = 'none'
       break
   }
 })
 
 videoElement.addEventListener('ended', () => {
   videoElement.style.display = 'none'
-  ytPlayer.g.style.display = 'none'
+  if (ytPlayer) {
+    ytPlayer.g.style.display = 'none'
+  }
   console.log('Video ended')
   isPlaying = false
   resetIdleTimer()
@@ -228,11 +391,6 @@ videoElement.addEventListener('timeupdate', () => {
     currentTime: videoElement.currentTime,
     duration: videoElement.duration
   })
-
-  // Notifikasi next song 30 detik sebelum habis
-  console.log(
-    `Current time: ${videoElement.currentTime}, Duration: ${videoElement.duration}, Next song title: ${nextSongTitle}`
-  )
 
   if (
     videoElement.duration &&
@@ -248,8 +406,9 @@ function startIdleTimer() {
   if (idleTimer) clearInterval(idleTimer)
   idleTimer = setInterval(() => {
     const now = Date.now()
-    if (!isPlaying && !isIdlePlaying && now - lastInteractionTime > IDLE_TIMEOUT) {
+    if (isStandby || (!isPlaying && !isIdlePlaying && now - lastInteractionTime > IDLE_TIMEOUT)) {
       playIdleVideo()
+      const infoDiv = document.getElementById('next-song-info')
       infoDiv.textContent = ``
     }
   }, 5000) // check setiap 5 detik
@@ -260,29 +419,64 @@ function resetIdleTimer() {
   if (isIdlePlaying) stopIdleVideo()
 }
 
-function playIdleVideo() {
-  console.log('[Idle] Playing idle video...')
+async function playIdleVideo() {
+  console.log('[Idle] Trying to play idle mode...')
   isIdlePlaying = true
+  window.electronAPI.sendToMain('video-is-idle')
   youtubePlayerElement.style.display = 'none'
-  ytPlayer.g.style.display = 'none'
+  if (ytPlayer) ytPlayer.g.style.display = 'none'
   videoElement.style.display = 'none'
   if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo()
 
-  idleVideoElement.style.display = 'block'
-  if (!audioContext) setupAudioContext()
-  idleVideoElement.src = IDLE_VIDEO_PATH
-  idleVideoElement.loop = true
-  idleVideoElement.play()
+  bannerImages = await window.electronAPI.getBannerImages()
+  console.log('[Idle] Found banner images:', bannerImages)
+
+  if (bannerImages.length === 0) {
+    // Fallback ke idle video
+    idleVideoElement.style.display = 'block'
+    idleVideoElement.src = IDLE_VIDEO_PATH
+    idleVideoElement.loop = true
+    idleVideoElement.play()
+  } else {
+    // Tampilkan carousel
+    showBannerCarousel()
+  }
+}
+
+function showBannerCarousel() {
+  const carousel = document.getElementById('idle-carousel')
+  const img = document.getElementById('carousel-image')
+  idleVideoElement.style.display = 'none'
+  carousel.style.display = 'block'
+
+  currentBannerIndex = 0
+  img.src = bannerImages[currentBannerIndex]
+
+  bannerInterval = setInterval(() => {
+    currentBannerIndex = (currentBannerIndex + 1) % bannerImages.length
+    img.src = bannerImages[currentBannerIndex]
+  }, 5000) // ganti gambar setiap 5 detik
+}
+
+function stopBannerCarousel() {
+  const carousel = document.getElementById('idle-carousel')
+  carousel.style.display = 'none'
+  if (bannerInterval) {
+    clearInterval(bannerInterval)
+    bannerInterval = null
+  }
 }
 
 function stopIdleVideo() {
   if (isIdlePlaying) {
-    console.log('[Idle] Stopping idle video...')
+    console.log('[Idle] Stopping idle mode...')
     isIdlePlaying = false
-    // videoElement.pause()
-    // videoElement.loop = false
-    // videoElement.src = ''
+    window.electronAPI.sendToMain('video-is-active')
     idleVideoElement.style.display = 'none'
+    idleVideoElement.pause()
+    idleVideoElement.src = ''
+
+    stopBannerCarousel()
   }
 }
 

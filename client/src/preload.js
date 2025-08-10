@@ -2,8 +2,14 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // Database & File System
+  reloadWindow: () => ipcRenderer.invoke('reload-window'),
+  startKeyBlocker: () => ipcRenderer.invoke('start-keyblocker'),
+  closeKeyBlocker: () => ipcRenderer.invoke('close-keyblocker'),
   getSongs: () => ipcRenderer.invoke('getSongs'),
   getStorageBaseDir: () => ipcRenderer.invoke('getStorageBaseDir'),
+  getServerUrl: () => ipcRenderer.invoke('get-server-url'),
+  saveFile: (filePath, buffer) => ipcRenderer.invoke('save-file', filePath, Buffer.from(buffer)),
+
   getBannerImages: () => ipcRenderer.invoke('get-banner-images'),
   fileExists: (filePath) => ipcRenderer.invoke('fileExists', filePath),
   checkAdmin: (password) => ipcRenderer.invoke('checkAdmin', password),
@@ -26,7 +32,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSysParam: (key) => ipcRenderer.invoke('get-sys-param', key),
 
   // YouTube Search
-  searchYoutube: (apiKey, query) => ipcRenderer.invoke('search-youtube', { apiKey, query }),
+  // searchYoutube: (apiKey, query) => ipcRenderer.invoke('search-youtube', { apiKey, query }),
+  searchYoutubeNew: (query) => ipcRenderer.invoke('search-youtube-new', query),
   youtubeRecommend: () => ipcRenderer.invoke('youtube-recommendations'),
 
   // Playlist Sync
@@ -47,5 +54,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // License
   isLicensed: () => ipcRenderer.invoke('license:isLicensed'),
   activateLicense: (licenseKey) => ipcRenderer.invoke('license:activate', licenseKey),
-  getHardwareId: () => ipcRenderer.invoke('license:getHardwareId')
+  getHardwareId: () => ipcRenderer.invoke('license:getHardwareId'),
+
+  onUpdateVideoIdle: (callback) => ipcRenderer.on('update-video-idle', callback),
+  removeUpdateVideoIdle: (callback) => ipcRenderer.removeListener('update-video-idle', callback),
+  onUserActive: (callback) => ipcRenderer.on('user-active', callback),
+  onStandby: (callback) => ipcRenderer.on('standby', callback),
+  sendStandby: () => ipcRenderer.invoke('send-standby'),
+  onActive: (callback) => ipcRenderer.on('active', callback),
+  sendActive: () => ipcRenderer.invoke('send-active'),
+  onInactive: (callback) => ipcRenderer.on('inactive', callback),
+  sendInactive: () => ipcRenderer.invoke('send-inactive'),
+  sendUserActive: () => ipcRenderer.invoke('send-user-active'),
+  userIsActive: () => ipcRenderer.send('user-is-active'),
+  logToFile: (msg) => ipcRenderer.invoke('log-to-file', msg),
+
+  onAppReady: (callback) => ipcRenderer.on('app-ready', callback)
 })

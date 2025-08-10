@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS songs (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   play_count INT DEFAULT 0,
   cover_updated_at TIMESTAMP NULL DEFAULT NULL,
-  song_updated_at TIMESTAMP NULL DEFAULT NULL
+  song_updated_at TIMESTAMP NULL DEFAULT NULL,
+  video_path VARCHAR(255),
+  vocal ENUM('Left', 'Right') DEFAULT 'Left',
 );
 
 -- Tabel banners

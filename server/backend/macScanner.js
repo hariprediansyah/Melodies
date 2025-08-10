@@ -18,7 +18,7 @@ async function updateRoomIP(id, ip, mac, name) {
     const serverIp = getServerIp()
     await axios.post(
       `http://${ip}:5771/updateserver`,
-      { server_ip: serverIp + ':4000', client_mac: mac, client_room_id: id, client_room_name: name },
+      { server_ip: serverIp + ':4000', client_mac: mac, client_room_id: String(id), client_room_name: name },
       { timeout: 2000 }
     )
     console.log(`Berhasil update server_ip ke client ${ip}`)

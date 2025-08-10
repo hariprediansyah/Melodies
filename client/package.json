@@ -78,8 +78,11 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-slick": "^0.30.3",
+    "react-virtualized-auto-sizer": "^1.0.26",
+    "react-window": "^1.8.11",
     "slick-carousel": "^1.8.1",
     "sql.js": "^1.13.0",
-    "win-audio": "^3.0.5"
+    "win-audio": "^3.0.5",
+    "yt-search": "^2.13.1"
   }
 }

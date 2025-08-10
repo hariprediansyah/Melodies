@@ -1,3 +1,4 @@
+using AudioSwitcher.AudioApi.CoreAudio;
 using Microsoft.Data.Sqlite;
 using ServiceSync;
 using System.Text.Json;
@@ -53,6 +54,57 @@ app.MapPost("/updateserver", async (HttpContext context) =>
         return Results.Problem("Internal Server Error", statusCode: 500);
     }
 });
+
+app.MapGet("/systemvolume", async (HttpContext context) =>
+{
+    try
+    {
+        var coreAudio = new CoreAudioController();
+        var defaultPlayback = await coreAudio.GetDefaultDeviceAsync(AudioSwitcher.AudioApi.DeviceType.Playback, AudioSwitcher.AudioApi.Role.Multimedia);
+        var volume = defaultPlayback.Volume;
+
+        return Results.Ok(new { volume });
+    }
+    catch (Exception ex)
+    {
+        // Ganti dengan service logging milikmu jika ada
+        Console.WriteLine($"Error getting system volume: {ex.Message}");
+        return Results.Problem("Internal Server Error", statusCode: 500);
+    }
+});
+
+app.MapPost("/systemvolume", async (HttpContext context) =>
+{
+    try
+    {
+        using var reader = new StreamReader(context.Request.Body);
+        var rawBody = await reader.ReadToEndAsync();
+        var body = JsonSerializer.Deserialize<Dictionary<string, int>>(rawBody);
+        if (body == null)
+        {
+            return Results.BadRequest("Volume must be between 0 and 100.");
+        }
+
+        body!.TryGetValue("volume", out var volume);
+
+        if (volume < 0 || volume > 100)
+        {
+            return Results.BadRequest("Volume must be between 0 and 100.");
+        }
+
+        var coreAudio = new CoreAudioController();
+        var defaultPlayback = await coreAudio.GetDefaultDeviceAsync(AudioSwitcher.AudioApi.DeviceType.Playback, AudioSwitcher.AudioApi.Role.Multimedia);
+        defaultPlayback.Volume = volume;
+
+        return Results.Ok(new { message = $"Volume set to {volume}%" });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error setting system volume: {ex.Message}");
+        return Results.Problem("Internal Server Error", statusCode: 500);
+    }
+});
+
 
 
 app.Run("http://0.0.0.0:5771");

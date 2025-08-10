@@ -12,6 +12,7 @@ const ffprobe = require('ffprobe')
 const ffprobeStatic = require('ffprobe-static')
 const macScanner = require('./macScanner')
 const license = require('./license')
+const axios = require('axios')
 
 // Jalankan scan MAC address otomatis setiap 30 detik
 setInterval(() => {
@@ -25,7 +26,7 @@ setInterval(() => {
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB limit
+    fileSize: 1024 * 1024 * 1024 // 1GB limit
   }
 })
 
@@ -67,14 +68,19 @@ app.post('/activate-license', async (req, res) => {
   const { licenseKey } = req.body
   console.log('Activating license with key:', licenseKey)
 
-  if (!licenseKey) return res.status(400).json({ success: false, message: 'License key required' })
+  if (!licenseKey) return res.json({ success: false, message: 'License key required' })
   const result = await license.activateLicense(licenseKey)
   console.log('License activation result:', result)
   if (result.success) {
     res.json({ success: true })
     // setTimeout(() => process.exit(0), 1000) // restart agar lisensi aktif
   } else {
-    res.status(400).json({ success: false, message: result.message || 'Activation failed' })
+    if (result.message.includes('Request failed with status code 400')) {
+      console.error('Invalid license key:', result.message)
+      res.json({ success: false, message: 'Invalid license key' })
+    } else {
+      res.json({ success: false, message: result.message || 'Activation failed' })
+    }
   }
 })
 
@@ -125,7 +131,7 @@ app.get('/rooms/total-active', async (req, res) => {
 
 app.get('/roomsdashboard', async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT A.id, A.name, A.status, C.Total, B.start_time FROM rooms A
+    `SELECT A.id, A.name, A.status, C.Total, B.start_time, A.ip_address FROM rooms A
     left join room_sessions B ON A.id = B.room_id AND B.status = 'Active'
     left join (SELECT COUNT(*) as Total, room_id from song_playlist GROUP by room_id) C ON A.id = C.room_id
     ORDER BY A.id ASC`
@@ -138,6 +144,19 @@ app.post('/rooms/shutdown-all', async (req, res) => {
   try {
     const [result] = await pool.query('UPDATE rooms SET status = "Inactive", force_shutdown = "Y"')
     await pool.query('UPDATE room_sessions SET status = "Ended" where status = "Active"')
+    res.json({ success: true, affectedRows: result.affectedRows })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/rooms/shutdown-room/:id', async (req, res) => {
+  const roomId = req.params.id
+  try {
+    const [result] = await pool.query('UPDATE rooms SET status = "Inactive", force_shutdown = "Y" WHERE id = ?', [
+      roomId
+    ])
+    await pool.query('UPDATE room_sessions SET status = "Ended" WHERE room_id = ? AND status = "Active"', [roomId])
     res.json({ success: true, affectedRows: result.affectedRows })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
@@ -198,6 +217,8 @@ app.post('/rooms/:id/start-session', async (req, res) => {
     await pool.query('INSERT INTO room_sessions (room_id, start_time, status) VALUES (?, NOW(), "Active")', [roomId])
     // (Opsional) Update status room ke Active
     await pool.query('UPDATE rooms SET status="Active" WHERE id=?', [roomId])
+    // hapus playlist sebelumnya
+    await pool.query('DELETE FROM song_playlist WHERE room_id=?', [roomId])
     res.json({ success: true })
   } catch (err) {
     res.status(500).json({ error: 'Failed to start session' })
@@ -275,6 +296,25 @@ app.post(
           fs.unlinkSync(outPath)
 
           songFileName = 'song.mp4'
+        } else if (ext === '.mpg') {
+          const tempPath = path.join(storagePath, 'temp_' + Date.now() + '.mpg')
+          fs.writeFileSync(tempPath, buffer)
+
+          try {
+            const outPath = tempPath.replace('.mpg', '.mp4')
+            // Konversi .mpg ke .mp4
+            execSync(`ffmpeg -y -i "${tempPath}" -c:v libx264 -c:a aac -strict experimental "${outPath}"`)
+
+            buffer = fs.readFileSync(outPath)
+            fs.unlinkSync(tempPath)
+            fs.unlinkSync(outPath)
+
+            format = 'mp4'
+            songFileName = 'song.mp4'
+          } catch (e) {
+            fs.unlinkSync(tempPath)
+            throw e
+          }
         } else {
           // Format selain .dat
           format = ext.replace('.', '')
@@ -327,6 +367,27 @@ app.post(
     }
   }
 )
+
+app.get('/songs/download/:id', async (req, res) => {
+  const songId = req.params.id
+  const [rows] = await pool.query('SELECT * FROM songs WHERE id=?', [songId])
+  if (rows.length === 0) {
+    return res.status(404).json({ error: 'Song not found' })
+  }
+  const song = rows[0]
+  const songFilePath = song.video_path
+
+  if (!fs.existsSync(songFilePath)) {
+    return res.status(404).json({ error: 'Song file not found' })
+  }
+
+  res.download(songFilePath, `song.${song.format}`, (err) => {
+    if (err) {
+      console.error('Download error:', err)
+      res.status(500).send('Failed to download song')
+    }
+  })
+})
 app.put(
   '/songs/:id',
   upload.fields([
@@ -372,10 +433,29 @@ app.put(
           fs.unlinkSync(tempPath)
           fs.unlinkSync(outPath)
 
-          songFileName = 'song_' + Date.now() + '.mp4'
+          songFileName = 'song.mp4'
+        } else if (ext === '.mpg') {
+          const tempPath = path.join(storagePath, 'temp_' + Date.now() + '.mpg')
+          fs.writeFileSync(tempPath, buffer)
+
+          try {
+            const outPath = tempPath.replace('.mpg', '.mp4')
+            // Konversi .mpg ke .mp4
+            execSync(`ffmpeg -y -i "${tempPath}" -c:v libx264 -c:a aac -strict experimental "${outPath}"`)
+
+            buffer = fs.readFileSync(outPath)
+            fs.unlinkSync(tempPath)
+            fs.unlinkSync(outPath)
+
+            format = 'mp4'
+            songFileName = 'song.mp4'
+          } catch (e) {
+            fs.unlinkSync(tempPath)
+            throw e
+          }
         } else {
           format = ext.replace('.', '')
-          songFileName = 'song_' + Date.now() + ext
+          songFileName = 'song' + ext
         }
 
         const songFilePath = path.join(songDir, songFileName)
@@ -555,7 +635,10 @@ app.get('/playlist', async (req, res) => {
   const roomId = req.query.room_id
   if (!roomId) return res.status(400).json({ success: false, error: 'room_id required' })
   try {
-    const [playlist] = await pool.query('SELECT * FROM song_playlist WHERE room_id=?', [roomId])
+    const [playlist] = await pool.query(
+      'SELECT a.room_id, a.id, a.title, a.artist, a.video_url, a.is_youtube, b.vocal FROM song_playlist a left join songs b on a.id = b.id WHERE a.room_id=?',
+      [roomId]
+    )
     console.log(playlist)
 
     res.json(playlist)
@@ -804,6 +887,37 @@ app.get('/youtube-history', async (req, res) => {
     res.json({ success: true, data: rows })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/systemvolume', async (req, res) => {
+  const { volume, ip } = req.body
+  const apiUrl = `http://${ip}:5771/systemvolume`
+  try {
+    const body = { volume }
+    const resPost = await axios.post(apiUrl, body)
+    if (resPost.status !== 200) {
+      return { success: false, error: 'Failed to set system volume' }
+    }
+    return res.json({ success: true, message: 'System volume set successfully' })
+  } catch (err) {
+    console.error('License activation error:', err.message)
+    return { success: false, message: err.message }
+  }
+})
+
+app.get('/systemvolume', async (req, res) => {
+  const { ip } = req.query
+  const apiUrl = `http://${ip}:5771/systemvolume`
+  try {
+    const response = await axios.get(apiUrl)
+    if (response.status !== 200) {
+      return res.json({ success: false, error: 'Failed to get system volume' })
+    }
+    return res.json({ success: true, data: response.data })
+  } catch (err) {
+    console.error('Error getting system volume:', err.message)
+    return res.json({ success: false, error: err.message })
   }
 })
 

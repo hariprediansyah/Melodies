@@ -15,6 +15,9 @@ export default function Dashboard({ onDetail }) {
   const [totalSong, setTotalSong] = useState(0)
   const [search, setSearch] = useState('')
   const [confirmAction, setConfirmAction] = useState(null)
+  const [confirmShutdown, setConfirmShutdown] = useState(false)
+  const [room, setRoom] = useState(null)
+  const [isWaiting, setIsWaiting] = useState(false)
 
   useEffect(() => {
     fetchRooms()
@@ -87,22 +90,28 @@ export default function Dashboard({ onDetail }) {
   }
 
   const handleStartSession = async (roomId) => {
+    setIsWaiting(true)
     try {
       await roomAPI.startSession(roomId)
       fetchRooms()
       showNotif('Sesi berhasil dimulai!', 'success')
     } catch (e) {
       showNotif('Gagal memulai sesi!', 'error')
+    } finally {
+      setTimeout(() => setIsWaiting(false), 2000)
     }
   }
 
   const handleEndSession = async (roomId) => {
+    setIsWaiting(true)
     try {
       await roomAPI.endSession(roomId)
       fetchRooms()
       showNotif('Sesi berhasil diakhiri!', 'success')
     } catch (e) {
       showNotif('Gagal mengakhiri sesi!', 'error')
+    } finally {
+      setTimeout(() => setIsWaiting(false), 2000)
     }
   }
 
@@ -133,6 +142,22 @@ export default function Dashboard({ onDetail }) {
       showNotif('Semua room berhasil di-shutdown!', 'success')
     } catch (e) {
       showNotif('Gagal shutdown semua room!', 'error')
+    }
+  }
+
+  const handleShutdown = async () => {
+    setLoading(true)
+    console.log('Shutting down room:', room.id)
+
+    const resShutdown = await roomAPI.shutdown(room.id)
+    setLoading(false)
+    if (resShutdown.success) {
+      showNotif('Room shutdown successfully', 'success')
+      fetchRooms() // Refresh rooms after shutdown
+      setConfirmShutdown(null) // Close confirmation dialog
+    } else {
+      setModalErrorOpen(true)
+      setErrorMessage(resShutdown.error || resShutdown.message || 'Failed to shutdown room')
     }
   }
 
@@ -228,6 +253,12 @@ export default function Dashboard({ onDetail }) {
                   handleStartSession={handleStartSession}
                   handleStopSession={handleEndSession}
                   handleDetail={() => onDetail(room)}
+                  showNotif={showNotif}
+                  handleShutdown={() => {
+                    setRoom(room)
+                    setConfirmShutdown(room.id)
+                  }}
+                  isWaiting={isWaiting}
                 />
               ))
             ) : (
@@ -332,6 +363,23 @@ export default function Dashboard({ onDetail }) {
                   handleShutdownAll()
                   setConfirmAction(null)
                 }}>
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmShutdown && (
+        <div className='fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50'>
+          <div className='bg-[#1f1f1f] rounded-lg p-6 shadow-lg'>
+            <p className='mb-4 text-white'>Apakah Anda yakin ingin mematikan room ini?</p>
+            <div className='flex justify-end gap-2'>
+              <button
+                className='px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400'
+                onClick={() => setConfirmShutdown(null)}>
+                Cancel
+              </button>
+              <button className='px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700' onClick={handleShutdown}>
                 Confirm
               </button>
             </div>

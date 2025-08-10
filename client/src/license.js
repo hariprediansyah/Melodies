@@ -3,13 +3,12 @@ const path = require('path')
 const { machineIdSync } = require('node-machine-id')
 const axios = require('axios')
 
-const LICENSE_FILE = path.join(__dirname, 'licensed.json')
-
 function getHardwareId() {
   return machineIdSync()
 }
 
-function isLicensed() {
+function isLicensed(baseDir) {
+  const LICENSE_FILE = path.join(baseDir, 'licensed.json')
   if (!fs.existsSync(LICENSE_FILE)) return false
   try {
     const data = JSON.parse(fs.readFileSync(LICENSE_FILE, 'utf-8'))
@@ -22,7 +21,8 @@ function isLicensed() {
   }
 }
 
-async function activateLicense(licenseKey) {
+async function activateLicense(baseDir, licenseKey) {
+  const LICENSE_FILE = path.join(baseDir, 'licensed.json')
   const hardwareId = getHardwareId()
   // Ganti URL di bawah dengan API kamu
   const apiUrl = 'http://89.116.110.215:5229/activate-license'
@@ -50,6 +50,9 @@ async function activateLicense(licenseKey) {
     console.error('License activation failed:', res.data)
     return { success: false, message: res.data && res.data.message }
   } catch (err) {
+    if (err.message.includes('Request failed with status code 400')) {
+      return { success: false, message: 'Invalid license key' }
+    }
     console.error('License activation error:', err.message)
     return { success: false, message: err.message }
   }

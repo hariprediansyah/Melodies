@@ -55,6 +55,10 @@ export const roomAPI = {
     apiCall('/rooms/shutdown-all', {
       method: 'POST'
     }),
+  shutdown: (id) =>
+    apiCall(`/rooms/shutdown-room/${id}`, {
+      method: 'POST'
+    }),
   getMacAddresses: () => apiCall('/mac-addresses')
 }
 
@@ -125,5 +129,11 @@ export const systemAPI = {
     apiCall('/activate-license', {
       method: 'POST',
       body: JSON.stringify({ licenseKey })
+    }),
+  getVolume: (ip) => apiCall('/systemvolume?ip=' + ip),
+  setVolume: (body) =>
+    apiCall('/systemvolume', {
+      method: 'POST',
+      body: JSON.stringify(body)
     })
 }

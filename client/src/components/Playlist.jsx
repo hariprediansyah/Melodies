@@ -15,7 +15,7 @@ const Playlist = forwardRef(({ playlist, onSelectSong, selectedSong, onPlaySong,
             return (
               <div
                 key={index}
-                className={`p-2 rounded-md flex text-lg justify-between items-center group transition-all cursor-pointer 
+                className={`p-2 rounded-md flex text-xl justify-between items-center group transition-all cursor-pointer 
                   ${isPlaying ? 'bg-brand-green text-black' : ''}
                   ${isSelected && !isPlaying ? 'bg-brand-green-light text-black' : ''}
                   ${!isSelected && !isPlaying ? 'bg-white bg-opacity-5 hover:bg-opacity-10' : ''}

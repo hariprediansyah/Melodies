@@ -152,7 +152,7 @@ export default function AddEditSong({ mode, songId, onBack }) {
             <FilePicker
               label='Upload Songs'
               name='songfile'
-              accept='.dat, .mp4'
+              accept='.dat, .mp4, .mpg'
               onChange={handleChange}
               file={form.songfile}
               helper='*dat, *mp4 files are allowed   max file 200mb'

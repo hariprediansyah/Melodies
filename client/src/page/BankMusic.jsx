@@ -35,7 +35,7 @@ export default function BankMusic({ onBack, searchQuery }) {
   return (
     <div className='row-span-14 grid grid-rows-20 px-8 py-6 gap-4'>
       <button className='row-span-1 text-[#B1C953] mb-4 flex items-center gap-2' onClick={onBack}>
-        <span className='text-xl'>&#8592;</span> <span>Back to Home</span>
+        <span className='text-2xl'>&#8592;</span> <span>Back to Home</span>
       </button>
       <h2 className='row-span-1 text-2xl font-semibold mb-4'>Recently Added</h2>
       <div className='row-span-5 grid grid-cols-5 gap-6'>

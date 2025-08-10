@@ -42,7 +42,7 @@ export default function Library({ onHome }) {
   return (
     <div className='px-8 py-6'>
       <button className='text-purple mb-4 flex items-center gap-2' onClick={onHome}>
-        <span className='text-xl'>&#8592;</span> <span>Back to Home</span>
+        <span className='text-2xl'>&#8592;</span> <span>Back to Home</span>
       </button>
       <h2 className='text-2xl font-semibold mb-4'>Recently Added</h2>
       <div className='grid grid-cols-5 gap-6'>

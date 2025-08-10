@@ -1,5 +1,6 @@
-import { Settings } from 'lucide-react'
+import { Loader2, Power, Settings, Volume, Volume1, Volume2, X } from 'lucide-react'
 import React, { useState, useRef, useEffect } from 'react'
+import { roomAPI, systemAPI } from '../services/api'
 
 export const GlassCard = ({ className, children }) => {
   return (
@@ -310,8 +311,41 @@ export function useNotifStack() {
   return { notifs, showNotif, onClose }
 }
 
-export function CardRoom({ room, handleStartSession, handleStopSession, handleDetail }) {
+export function CardRoom({ room, handleStartSession, handleStopSession, showNotif, handleShutdown, isWaiting }) {
   const [duration, setDuration] = useState('00:00:00')
+  const [modalVolumeOpen, setModalVolumeOpen] = useState(false)
+  const [volume, setVolume] = useState(0)
+  const [modalErrorOpen, setModalErrorOpen] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleVolume = async () => {
+    setLoading(true)
+    const resVolume = await systemAPI.getVolume(room.ip_address)
+    setLoading(false)
+    if (resVolume.success) {
+      setModalVolumeOpen(true)
+      setVolume(resVolume.data.volume)
+    } else {
+      setModalErrorOpen(true)
+      setErrorMessage(resVolume.error || resVolume.message || 'Failed to get volume')
+    }
+  }
+
+  const handleClose = async () => {
+    const body = { ip: room.ip_address, volume }
+    const resVolume = await systemAPI.setVolume(body)
+    console.log('Setting volume:', resVolume)
+
+    if (resVolume.success) {
+      setModalVolumeOpen(false)
+      showNotif(`Volume set to ${volume}%`, 'success')
+    } else {
+      setModalErrorOpen(false)
+      showNotif(resVolume.error || resVolume.message || 'Failed to set volume', 'error')
+    }
+    setModalVolumeOpen(false)
+  }
 
   useEffect(() => {
     if (!room.start_time) {
@@ -377,36 +411,106 @@ export function CardRoom({ room, handleStartSession, handleStopSession, handleDe
         <div className='flex gap-2 mt-4 md:mt-0'>
           {room.status === 'Active' ? (
             <button
-              className='bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-bold text-base'
-              onClick={() => handleStopSession(room.id)}>
-              Stop Session
+              className={`px-6 py-2 rounded-lg font-bold text-base text-white ${
+                isWaiting ? 'bg-red-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'
+              }`}
+              onClick={() => !isWaiting && handleStopSession(room.id)}
+              disabled={isWaiting}>
+              {isWaiting ? 'Please wait...' : 'Stop Session'}
             </button>
           ) : room.status === 'Inactive' ? (
-            <button
-              className='bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold text-base'
-              disabled>
+            <button className='bg-gray-600 text-white px-6 py-2 rounded-lg font-bold text-base' disabled>
               Start Session
             </button>
           ) : (
             <button
-              className='bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold text-base'
-              onClick={() => handleStartSession(room.id)}>
-              Start Session
+              className={`px-6 py-2 rounded-lg font-bold text-base text-white ${
+                isWaiting ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
+              }`}
+              onClick={() => !isWaiting && handleStartSession(room.id)}
+              disabled={isWaiting}>
+              {isWaiting ? 'Please wait...' : 'Start Session'}
+            </button>
+          )}
+        </div>
+
+        <div>
+          {room.status !== 'Inactive' && (
+            <button
+              className='bg-red-600 hover:bg-red-700 text-white px-2 py-2 rounded-lg font-bold text-base'
+              onClick={handleShutdown}>
+              <Power />
             </button>
           )}
         </div>
         <div>
           {room.status === 'Active' ? (
-            <button className='bg-[#0E9EEFEB] rounded-lg p-2' onClick={handleDetail}>
-              <Settings className='text-white' />
-            </button>
+            <div
+              className={`${loading ? 'bg-gray-700' : 'bg-[#0E9EEFEB] cursor-pointer'} transition-all rounded-lg p-2`}
+              onClick={handleVolume}>
+              <Volume2 className={`${loading ? 'text-gray-400' : 'text-white'} transition-all`} />
+            </div>
           ) : (
             <div className='bg-gray-700 rounded p-2'>
-              <Settings className='text-gray-400' />
+              <Volume2 className='text-gray-400' />
             </div>
           )}
         </div>
       </div>
+      {modalErrorOpen && (
+        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
+          <div className='bg-[#181818] rounded-lg p-6 w-96'>
+            <div className='flex items-center gap-2'>
+              <X size={20} className='text-white' />
+              <span className='font-medium text-white'>Error</span>
+            </div>
+            <p className='text-white mt-2'>{errorMessage}</p>
+            <button
+              className='bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-bold text-base mt-4'
+              onClick={() => setModalErrorOpen(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      {modalVolumeOpen && (
+        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
+          <div className='bg-[#181818] rounded-lg p-6 w-96'>
+            <VolumeControl volume={volume} setVolume={setVolume} room={room} onClose={handleClose} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function VolumeControl({ volume, setVolume, onClose }) {
+  const handleChange = (e) => {
+    setVolume(Number(e.target.value))
+  }
+
+  return (
+    <div className='w-full'>
+      <label className='flex items-center gap-2 text-white mb-2'>
+        <Volume2 size={20} className='text-white' />
+        <span className='font-medium'>Master Volume</span>
+      </label>
+      <div className='flex items-center gap-3'>
+        <input
+          type='range'
+          min={0}
+          max={100}
+          value={volume}
+          onChange={handleChange}
+          className='w-full accent-[#b1c953] h-2'
+        />
+        <span className='text-[#b1c953] font-semibold text-sm'>{volume}%</span>
+      </div>
+      <button
+        className='mt-6 w-full py-2 rounded bg-gray-700 text-white font-semibold hover:bg-gray-600 transition'
+        onClick={onClose}>
+        Simpan
+      </button>
     </div>
   )
 }

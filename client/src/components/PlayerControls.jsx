@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, MicVocal } from 'lucide-react'
 
 const PlayerControls = ({ isPlaying, onPlayPause, onNext, onPrev, currentSong }) => {
   const [vocalOn, setVocalOn] = useState(true)
@@ -33,14 +33,20 @@ const PlayerControls = ({ isPlaying, onPlayPause, onNext, onPrev, currentSong })
   }
 
   const handleVocalToggle = () => {
+    console.log(currentSong)
+
     const newVocalState = !vocalOn
     setVocalOn(newVocalState)
-    window.electronAPI.sendVideoControl({ type: 'VOCAL', mode: newVocalState ? 'on' : 'off' })
+    window.electronAPI.sendVideoControl({
+      type: 'VOCAL',
+      mode: newVocalState ? 'on' : 'off',
+      vocal: currentSong.vocal || 'left'
+    })
   }
 
   return (
-    <div className='row-span-2 grid grid-rows-3'>
-      <div className='row-span-1 gap-2 bg-black bg-opacity-50 border border-white/10 p-4 rounded-lg mt-4 flex items-center justify-between text-white'>
+    <div className='row-span-2 bg-black bg-opacity-50 border border-white/10 p-2'>
+      <div className='flex items-center justify-between text-white gap-2'>
         <input
           type='range'
           min={0}
@@ -52,38 +58,42 @@ const PlayerControls = ({ isPlaying, onPlayPause, onNext, onPrev, currentSong })
             window.electronAPI.sendVideoControl({ type: 'SEEK', time: e.target.value })
           }}
         />
-        <div className='text-lg font-semibold flex gap-2 items-center'>
+        <div className='text-xl font-semibold flex gap-2 items-center'>
           <p className='text-[#b1c953]'>{formatTime(currentTime)}</p> <p className='mx-2'>/</p>{' '}
           <p>{formatTime(duration)}</p>
         </div>
       </div>
-      <div className='row-span-2 bg-black bg-opacity-50 border border-white/10 p-4 rounded-lg mt-4 flex items-center justify-between text-white'>
-        <div className='flex items-center gap-4'>
+      <div className='row-span-2 grid grid-cols-5 items-center text-white'>
+        {/* Kontrol tombol di tengah */}
+        <div className='col-span-3 flex items-center justify-center gap-4'>
           <button onClick={onPrev} className='hover:text-brand-green-light transition-colors'>
             <SkipBack />
           </button>
           <button onClick={onPlayPause} className='bg-brand-green hover:bg-brand-green-light rounded-full p-2 gap-1'>
-            {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+            {isPlaying ? <Pause size={22} /> : <Play size={22} />}
           </button>
           <button onClick={onNext} className='hover:text-brand-green-light transition-colors'>
             <SkipForward />
           </button>
         </div>
 
-        <div className='flex items-center gap-4'>
-          <span>Vocal</span>
+        {/* Vocal dan volume di kanan */}
+        <div className='col-span-2 flex items-center justify-end gap-4'>
+          <span>
+            <MicVocal />
+          </span>
           <div
             onClick={handleVocalToggle}
-            className={`w-14 h-7 rounded-full flex items-center cursor-pointer transition-colors ${
+            className={`w-10 h-4 rounded-full flex items-center cursor-pointer transition-colors ${
               vocalOn ? 'bg-[#b1c953]' : 'bg-gray-600'
             }`}>
             <span
-              className={`w-6 h-6 bg-white rounded-full transition-transform transform ${
+              className={`w-4 h-4 bg-white rounded-full transition-transform transform ${
                 vocalOn ? 'translate-x-7' : 'translate-x-1'
               }`}
             />
           </div>
-          <div className=' transition-colors'>
+          <div className='transition-colors'>
             <Volume2 />
           </div>
           <input

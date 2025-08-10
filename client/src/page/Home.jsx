@@ -32,12 +32,11 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
 
   const currentSong = currentSongIndex > -1 ? playlist[currentSongIndex] : null
   const displayedSongs = mode === 'youtube' ? youtubeSongs : mode === 'local' ? localSongs : newSongs
-  console.log('displayedSongs', displayedSongs)
 
   // Pagination logic
   const indexOfLastSong = currentPage * songsPerPage
   const indexOfFirstSong = indexOfLastSong - songsPerPage
-  const currentSongs = displayedSongs.slice(indexOfFirstSong, indexOfLastSong)
+  // const currentSongs = displayedSongs.slice(indexOfFirstSong, indexOfLastSong)
   const totalPages = Math.ceil(displayedSongs.length / songsPerPage)
 
   const paginate = (pageNumber) => {
@@ -47,7 +46,6 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
   }
   // Fetch local songs and config on mount
   useEffect(() => {
-    window.electronAPI.openVideoWindow().catch(console.error)
     window.electronAPI
       .getSongs()
       .then((songs) => {
@@ -101,11 +99,19 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
       setPlaylist([...playlist, selectedSong])
       window.electronAPI.syncPlaylistAdd(selectedSong)
       window.electronAPI.youtubeRecommend().then(setYoutubeRecommendations).catch(console.error)
+      console.log('Added to playlist:', selectedSong)
+      console.log('playlist', playlist)
+
+      if (playlist.length === 0) {
+        playSongAtIndex(0, [...playlist, selectedSong]) // Play the first song if it's the only one
+      }
     }
   }
 
   const handleClearPlaylist = () => {
     window.electronAPI.syncPlaylistRemoveAll()
+    window.electronAPI.sendVideoControl({ type: 'STOP' })
+    setSelectedSong(null)
     setPlaylist([])
     setCurrentSongIndex(-1)
     setIsPlaying(false)
@@ -120,7 +126,7 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
       if (currentSong && currentSong.id === selectedSong.id) {
         setCurrentSongIndex(-1)
         setIsPlaying(false)
-        window.electronAPI.closeVideoWindow()
+        window.electronAPI.sendVideoControl({ type: 'STOP' })
       }
     }
   }
@@ -175,13 +181,23 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
 
     if (mode === 'youtube') {
       if (config?.youtubeApiKey) {
-        window.electronAPI.searchYoutube(config.youtubeApiKey, searchQuery).then((results) => {
-          if (!results.error) {
-            setYoutubeSongs(results)
-          } else {
-            console.error(results.error)
-          }
-        })
+        // window.electronAPI.searchYoutube(config.youtubeApiKey, searchQuery).then((results) => {
+        //   if (!results.error) {
+        //     setYoutubeSongs(results)
+        //   } else {
+        //     console.error(results.error)
+        //   }
+        // })
+        window.electronAPI
+          .searchYoutubeNew(searchQuery)
+          .then((results) => {
+            if (!results.error) {
+              setYoutubeSongs(results)
+            } else {
+              console.error(results.error)
+            }
+          })
+          .catch(console.error)
       }
     } else if (mode === 'new') {
       const sortedSongs = allSongs.sort(
@@ -220,7 +236,10 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
       // Kirim info lagu selanjutnya
       const nextIndex = (index + 1) % pl.length
       const nextSong = pl[nextIndex]
-      window.electronAPI.sendVideoControl({ type: 'SET_NEXT_SONG_TITLE', title: nextSong ? nextSong.title : '' })
+      window.electronAPI.sendVideoControl({
+        type: 'SET_NEXT_SONG_TITLE',
+        title: nextSong && pl.length > 1 ? nextSong.title : ''
+      })
       const storagePath = await window.electronAPI.getStorageBaseDir()
       let videoSrc
       if (song.isYoutube) {
@@ -228,7 +247,7 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
       } else {
         videoSrc = `file://${storagePath}/songs/${song.id}/song.mp4`
       }
-      window.electronAPI.sendVideoControl({ type: 'LOAD', src: videoSrc, isYoutube: !!song.isYoutube })
+      window.electronAPI.sendVideoControl({ type: 'LOAD', src: videoSrc, isYoutube: !!song.isYoutube, id: song.id })
     },
     [playlist]
   )
@@ -247,8 +266,19 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
   }, [currentSong, isPlaying, playlist, playSongAtIndex])
 
   const handleNext = useCallback(() => {
-    playSongAtIndex((currentSongIndex + 1) % playlist.length)
-  }, [currentSongIndex, playlist.length, playSongAtIndex])
+    if (currentSongIndex > -1 && playlist.length > 1) {
+      window.electronAPI.sendVideoControl({ type: 'STOP' })
+      const nextIndex = currentSongIndex + 1
+      const newPlaylist = playlist.filter((_, i) => i !== currentSongIndex)
+      window.electronAPI.syncPlaylistRemove(currentSong.id)
+
+      setPlaylist(newPlaylist)
+      if (newPlaylist.length > 0) {
+        const adjustedIndex = nextIndex > currentSongIndex ? nextIndex - 1 : nextIndex
+        playSongAtIndex(adjustedIndex % newPlaylist.length, newPlaylist)
+      }
+    }
+  }, [currentSongIndex, playlist, playSongAtIndex, currentSong?.id])
 
   const handlePrev = useCallback(() => {
     const prevIndex = currentSongIndex - 1 < 0 ? playlist.length - 1 : currentSongIndex - 1
@@ -268,37 +298,20 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
   }
 
   return (
-    <div className='row-span-14 p-8'>
+    <div className='row-span-14 p-4'>
       <div className='grid grid-cols-3 gap-8 h-full'>
         {/* Left Column */}
-        <div className='col-span-2 grid grid-rows-15 gap-4 h-full overflow-hidden'>
-          <div className='row-span-10'>
+        <div className='col-span-2 grid grid-rows-15 gap-2 h-full overflow-hidden'>
+          <div className='row-span-11 '>
             <SongList
               handleAddToPlaylist={handleAddToPlaylist}
-              songs={currentSongs}
+              songs={displayedSongs} // semua data
               onSelectSong={setSelectedSong}
               selectedSong={selectedSong}
               isYoutubeMode={mode === 'youtube'}
             />
           </div>
-          <div className='row-span-1 flex justify-between items-center mt-4'>
-            <button
-              onClick={() => paginate(currentPage - 1)}
-              disabled={currentPage === 1}
-              className='bg-black bg-opacity-20 hover:bg-opacity-40 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50'>
-              Previous
-            </button>
-            <span>
-              Page {currentPage} of {totalPages}
-            </span>
-            <button
-              onClick={() => paginate(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className='bg-black bg-opacity-20 hover:bg-opacity-40 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50'>
-              Next
-            </button>
-          </div>
-          <div className='row-span-2 flex gap-4 mt-4 text-xl'>
+          <div className='row-span-2 flex gap-4 mt-4 text-2xl'>
             <button
               onClick={() => {
                 if (mode === 'youtube' || mode === 'new') {
@@ -354,7 +367,7 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
             onPlaySong={(song) => playSongAtIndex(playlist.indexOf(song))}
             currentSong={currentSong}
           />
-          <div className='row-span-2 flex justify-between gap-4 mt-4 text-xl'>
+          <div className='row-span-2 flex justify-between gap-4 mt-4 text-2xl'>
             <button
               onClick={handleTop}
               className='flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all'>

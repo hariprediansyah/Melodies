@@ -3,10 +3,12 @@ const path = require('path')
 const fs = require('fs')
 const Database = require('better-sqlite3')
 const macaddress = require('macaddress')
+const { exec, spawn } = require('child_process')
 // Tambahkan Express server untuk static file
 const express = require('express')
 const httpServer = express()
 const license = require('./license')
+const ytSearch = require('yt-search')
 
 httpServer.use(express.static(path.join(__dirname, '..', 'public')))
 const PORT = 5772
@@ -20,14 +22,14 @@ function getAppBasePath() {
 }
 
 const basePath = getAppBasePath()
-const dbPath = path.join(basePath, 'storage', 'database.sqlite')
-const db = new Database(dbPath)
-
 // Ensure storage directory exists
 const storageDir = path.join(basePath, 'storage')
 if (!fs.existsSync(storageDir)) {
   fs.mkdirSync(storageDir, { recursive: true })
 }
+// Initialize database
+const dbPath = path.join(basePath, 'storage', 'database.sqlite')
+const db = new Database(dbPath)
 
 // Window references
 let mainWindow = null
@@ -73,11 +75,18 @@ function createVideoWindow() {
   }
 }
 
+function reloadAllWindows() {
+  console.log(`Reloading window ${mainWindow}`)
+
+  videoWindow?.webContents.reloadIgnoringCache()
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1920,
     height: 1080,
     fullscreen: true,
+    kiosk: true,
     frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'dist', 'preload.bundle.js'),
@@ -94,8 +103,53 @@ function createWindow() {
 // --- ALL IPC HANDLERS ---
 
 // Database & File System
+
+ipcMain.handle('reload-window', () => {
+  reloadAllWindows()
+})
+
+ipcMain.handle('start-keyblocker', () => {
+  // Mulai KeyBlocker
+  const keyBlockerPath = path.join(basePath, 'KeyBlocker.exe') // Sesuaikan path-nya
+  keyBlockerProcess = spawn(keyBlockerPath, [], {
+    detached: true,
+    stdio: 'ignore' // Supaya tidak ngelag/tergantung Electron
+  })
+  keyBlockerProcess.unref()
+})
+
+ipcMain.handle('close-keyblocker', () => {
+  console.log('Closing KeyBlocker...')
+
+  exec('taskkill /IM KeyBlocker.exe /F', (err, stdout, stderr) => {
+    if (err) {
+      console.error('Failed to close KeyBlocker:', err)
+    }
+  })
+})
+
 ipcMain.handle('getSongs', () => db.prepare('SELECT * FROM songs ORDER BY title COLLATE NOCASE ASC').all())
 ipcMain.handle('getStorageBaseDir', () => path.resolve(basePath, 'storage'))
+ipcMain.handle('get-server-url', async () => {
+  // Ambil dari SQLite atau variabel konfigurasi yang sudah kamu pakai
+  const server_ip = getSysParamFromDb('server_ip')
+  const url = `http://${server_ip}`
+  return url
+})
+
+ipcMain.handle('save-file', (_, filePath, buffer) => {
+  try {
+    const dir = path.dirname(filePath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(filePath, buffer)
+    return true
+  } catch (err) {
+    console.error('Failed to save file:', err)
+    logToFile(`Failed to save file ${filePath}: ${err.message}`)
+    return false
+  }
+})
+
 ipcMain.handle('getBannerImages', async () => {
   try {
     const bannersDir = path.join(basePath, 'storage', 'banners')
@@ -180,29 +234,48 @@ ipcMain.handle('get-config', () => {
 })
 
 // YouTube Search
-ipcMain.handle('search-youtube', async (_, { apiKey, query }) => {
-  if (!apiKey || apiKey === 'YOUR_YOUTUBE_API_KEY_HERE') {
-    return { error: 'YouTube API key is not set.' }
-  }
-  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&q=${encodeURIComponent(
-    query
-  )}&key=${apiKey}&type=video`
+// ipcMain.handle('search-youtube', async (_, { apiKey, query }) => {
+//   if (!apiKey || apiKey === 'YOUR_YOUTUBE_API_KEY_HERE') {
+//     return { error: 'YouTube API key is not set.' }
+//   }
+//   const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&q=${encodeURIComponent(
+//     query
+//   )}&key=${apiKey}&type=video`
+//   try {
+//     const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+//     const response = await fetch(url)
+//     const data = await response.json()
+//     if (data.error) {
+//       return { error: data.error.message }
+//     }
+//     return data.items.map((item) => ({
+//       id: item.id.videoId,
+//       title: item.snippet.title,
+//       artist: item.snippet.channelTitle,
+//       video_url: `https://www.youtube.com/embed/${item.id.videoId}?autoplay=1`
+//     }))
+//   } catch (error) {
+//     console.error('Failed to search YouTube:', error)
+//     return { error: 'Failed to fetch from YouTube API.' }
+//   }
+// })
+
+ipcMain.handle('search-youtube-new', async (_, query) => {
   try {
-    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
-    const response = await fetch(url)
-    const data = await response.json()
-    if (data.error) {
-      return { error: data.error.message }
+    if (!query.includes('lagu')) {
+      query = 'lagu ' + query
     }
-    return data.items.map((item) => ({
-      id: item.id.videoId,
-      title: item.snippet.title,
-      artist: item.snippet.channelTitle,
-      video_url: `https://www.youtube.com/embed/${item.id.videoId}?autoplay=1`
+    const result = await ytSearch(query)
+    const hasil = result.videos.map((video) => ({
+      id: video.videoId,
+      title: video.title,
+      artist: video.author.name,
+      video_url: video.url
     }))
+    return hasil
   } catch (error) {
     console.error('Failed to search YouTube:', error)
-    return { error: 'Failed to fetch from YouTube API.' }
+    return { error: 'Failed to search YouTube.' }
   }
 })
 
@@ -346,6 +419,10 @@ ipcMain.handle('close-app', () => {
   app.quit()
 })
 
+ipcMain.on('youtube-api-ready', () => {
+  mainWindow.webContents.send('app-ready')
+})
+
 ipcMain.handle('get-banner-images', async () => {
   try {
     const bannersDir = path.join(basePath, 'storage', 'banners')
@@ -416,11 +493,11 @@ ipcMain.handle('check-call-status', async (_, callId) => {
 
 //license
 ipcMain.handle('license:isLicensed', () => {
-  return license.isLicensed()
+  return license.isLicensed(basePath)
 })
 
 ipcMain.handle('license:activate', async (event, licenseKey) => {
-  return await license.activateLicense(licenseKey)
+  return await license.activateLicense(basePath, licenseKey)
 })
 
 ipcMain.handle('license:getHardwareId', () => {
@@ -435,3 +512,76 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })
+
+ipcMain.on('video-is-idle', () => {
+  mainWindow.webContents.send('update-video-idle', true)
+})
+
+ipcMain.on('video-is-active', () => {
+  mainWindow.webContents.send('update-video-idle', false)
+})
+
+ipcMain.on('user-active', () => {
+  // Kirim ke semua window lain yang butuh info ini
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.webContents.send('user-active')
+  })
+})
+
+ipcMain.handle('send-user-active', () => {
+  if (videoWindow) {
+    videoWindow.webContents.send('user-active')
+  }
+})
+
+ipcMain.on('standby', () => {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.webContents.send('user-active')
+  })
+})
+
+ipcMain.handle('send-standby', () => {
+  if (videoWindow) {
+    videoWindow.webContents.send('standby')
+  }
+})
+
+ipcMain.on('active', () => {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.webContents.send('active')
+  })
+})
+
+ipcMain.handle('send-active', () => {
+  if (videoWindow) {
+    videoWindow.webContents.send('active')
+  }
+})
+
+ipcMain.handle('inactive', () => {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.webContents.send('inactive')
+  })
+})
+
+ipcMain.handle('send-inactive', () => {
+  if (videoWindow) {
+    videoWindow.webContents.send('inactive')
+  }
+})
+
+ipcMain.handle('log-to-file', (_, msg) => {
+  logToFile(msg)
+})
+
+function logToFile(msg) {
+  const logFilePath = path.join(storageDir, 'logs.txt')
+  const line = `[${new Date().toISOString()}] ${msg}`
+  try {
+    fs.appendFileSync(logFilePath, line + '\n')
+    return true
+  } catch (err) {
+    console.error('Failed to write to log file:', err)
+    return false
+  }
+}
