@@ -514,7 +514,25 @@ app.get('/banners', async (req, res) => {
   const [rows] = await pool.query(
     'SELECT id, title, description, created_at, updated_at, banner_updated_at FROM banners ORDER BY id ASC'
   )
-  res.json(rows)
+  const banners = rows.map((row) => {
+    let extension = null
+    const bannerPath = path.join(storagePath, 'banners', row.id.toString())
+    if (fs.existsSync(bannerPath + '.mp4')) {
+      extension = 'mp4'
+    } else if (fs.existsSync(bannerPath + '.jpg')) {
+      extension = 'jpg'
+    }
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      banner_updated_at: row.banner_updated_at,
+      extension
+    }
+  })
+  res.json(banners)
 })
 
 app.get('/banners/total', async (req, res) => {
@@ -532,8 +550,14 @@ app.post('/banners', upload.single('image'), async (req, res) => {
     if (!fs.existsSync(carouselDir)) {
       fs.mkdirSync(carouselDir, { recursive: true })
     }
-    imagePath = `/storage/banners/${bannerId}.jpg`
-    fs.writeFileSync(path.join(carouselDir, `${bannerId}.jpg`), req.file.buffer)
+    let ext = path.extname(req.file.originalname).toLowerCase()
+    if (ext === '.mp4') {
+      imagePath = `/storage/banners/${bannerId}.mp4`
+    } else {
+      imagePath = `/storage/banners/${bannerId}.jpg`
+      ext = '.jpg' // simpan selain mp4 sebagai jpg
+    }
+    fs.writeFileSync(path.join(carouselDir, `${bannerId}${ext}`), req.file.buffer)
     await pool.query('UPDATE banners SET banner_updated_at=NOW() WHERE id=?', [bannerId])
   }
   res.json({ success: true, id: bannerId, image: imagePath })
@@ -549,8 +573,23 @@ app.put('/banners/:id', upload.single('image'), async (req, res) => {
     if (!fs.existsSync(carouselDir)) {
       fs.mkdirSync(carouselDir, { recursive: true })
     }
-    imagePath = `/storage/banners/${bannerId}.jpg`
-    fs.writeFileSync(path.join(carouselDir, `${bannerId}.jpg`), req.file.buffer)
+    let ext = path.extname(req.file.originalname).toLowerCase()
+    if (ext === '.mp4') {
+      imagePath = `/storage/banners/${bannerId}.mp4`
+    } else {
+      imagePath = `/storage/banners/${bannerId}.jpg`
+      ext = '.jpg' // simpan selain mp4 sebagai jpg
+    }
+
+    //hapus file lama jika ada
+    const exts = ['.jpg', '.jpeg', '.png', '.webp', '.mp4']
+    for (const ext of exts) {
+      const filePath = path.join(carouselDir, `${bannerId}${ext}`)
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath)
+      }
+    }
+    fs.writeFileSync(path.join(carouselDir, `${bannerId}${ext}`), req.file.buffer)
     sql += ', banner_updated_at=NOW()'
   }
   sql += ' WHERE id=?'
@@ -558,12 +597,13 @@ app.put('/banners/:id', upload.single('image'), async (req, res) => {
   await pool.query(sql, params)
   res.json({ success: true, id: bannerId, image: imagePath })
 })
+
 app.delete('/banners/:id', async (req, res) => {
   const bannerId = req.params.id
   await pool.query('DELETE FROM banners WHERE id=?', [bannerId])
   // Hapus file gambar jika ada
   const carouselDir = path.join(storagePath, 'banners')
-  const exts = ['.jpg', '.jpeg', '.png', '.webp']
+  const exts = ['.jpg', '.jpeg', '.png', '.webp', '.mp4']
   for (const ext of exts) {
     const filePath = path.join(carouselDir, `${bannerId}${ext}`)
     if (fs.existsSync(filePath)) {

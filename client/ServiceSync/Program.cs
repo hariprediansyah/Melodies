@@ -11,7 +11,7 @@ builder.Services.AddSingleton<SyncService>();
 var app = builder.Build();
 
 var syncService = app.Services.GetRequiredService<SyncService>();
-syncService.Start();
+syncService.StartAsync();
 
 // Configure the HTTP request pipeline.
 

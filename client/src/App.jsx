@@ -22,9 +22,9 @@ export default function App() {
 
   useEffect(() => {
     window.electronAPI.onAppReady(() => {
-      console.log('🟢 App is ready!')
+      console.log('App is ready!')
       isAppReadyRef.current = true
-      window.electronAPI.startKeyBlocker()
+      // window.electronAPI.startKeyBlocker()
     })
 
     setTimeout(() => {
@@ -33,7 +33,7 @@ export default function App() {
 
     const checkLicense = async () => {
       const isLicensed = await window.electronAPI.isLicensed()
-      console.log('📄 License status:', isLicensed)
+      console.log('License status:', isLicensed)
       setLicensed(isLicensed)
     }
     checkLicense()
@@ -41,7 +41,7 @@ export default function App() {
     // Add fallback timer for isAppReady
     const fallbackTimer = setTimeout(() => {
       if (!isAppReadyRef.current) {
-        console.warn('⚠️ App ready fallback triggered after 8 seconds')
+        console.warn('App ready fallback triggered after 8 seconds')
         isAppReadyRef.current = true
       }
     }, 8000)
@@ -137,26 +137,27 @@ export default function App() {
 
         if (data && data.status) {
           if (data.status === 'Inactive') {
-            console.log('❌ Status is Inactive')
+            // console.log('❌ Status is Inactive')
             inactiveCount.current++
-            console.log('Inactive count:', inactiveCount.current)
-            console.log('First time:', isFirstTime.current)
+            // console.log('Inactive count:', inactiveCount.current)
+            // console.log('First time:', isFirstTime.current)
 
-            if ((inactiveCount.current >= 3 && isFirstTime.current == false) || isFirstTime.current == true) {
+            if ((inactiveCount.current >= 5 && isFirstTime.current == false) || isFirstTime.current == true) {
               setRoomStatus('Inactive')
-              window.electronAPI.sendInactive()
+              await window.electronAPI.sendInactive()
             }
+            await window.electronAPI.updateRoomStatusByMac('Standby').catch(console.error)
           } else {
-            console.log('✅ Status is:', data.status)
+            // console.log('✅ Status is:', data.status)
             setRoomStatus(data.status)
             inactiveCount.current = 0
           }
         } else {
-          console.log('❌ No valid data, setting to Inactive')
+          console.log('No valid data, setting to Inactive')
           setRoomStatus('Inactive')
         }
       } catch (error) {
-        console.log('💥 Error fetching status:', error)
+        console.log('Error fetching status:', error)
         setRoomStatus('Inactive')
       } finally {
         isFetchingRef.current = false

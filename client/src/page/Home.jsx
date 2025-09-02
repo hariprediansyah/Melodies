@@ -3,7 +3,7 @@ import SongList from '../components/SongList'
 import Playlist from '../components/Playlist'
 import PlayerControls from '../components/PlayerControls'
 import DateDisplay from '../components/DateDisplay'
-import { Youtube, ListMusic, ListPlus } from 'lucide-react'
+import { Youtube, ListMusic, ListPlus, CircleArrowUp, CircleArrowDown } from 'lucide-react'
 import Util from '../Util'
 
 export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuery, mode, setMode }) {
@@ -294,6 +294,25 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
         console.log('Scrolled to top of playlist')
         playlistScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
       }
+
+      // Play lagu kedua
+      if (playlist.length > 1) {
+        playSongAtIndex(1)
+      }
+    }
+  }
+
+  const handleUp = () => {
+    // play lagu sebelumnya
+    if (currentSongIndex > 0) {
+      playSongAtIndex(currentSongIndex - 1)
+    }
+  }
+
+  const handleDown = () => {
+    // play lagu berikutnya
+    if (currentSongIndex < playlist.length - 1) {
+      playSongAtIndex(currentSongIndex + 1)
     }
   }
 
@@ -368,6 +387,16 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
             currentSong={currentSong}
           />
           <div className='row-span-2 flex justify-between gap-4 mt-4 text-2xl'>
+            <button
+              onClick={handleUp}
+              className='flex bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-2 px-2 rounded-lg transition-all items-center justify-center'>
+              <CircleArrowUp width={40} height={40} />
+            </button>
+            <button
+              onClick={handleDown}
+              className='flex bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-2 px-2 rounded-lg transition-all items-center justify-center'>
+              <CircleArrowDown width={40} height={40} />
+            </button>
             <button
               onClick={handleTop}
               className='flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all'>

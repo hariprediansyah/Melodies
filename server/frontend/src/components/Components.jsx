@@ -231,12 +231,12 @@ export const BannerForm = ({ initialData = {}, onSubmit, onCancel, loading }) =>
             placeholder='Enter Description'
           />
           <FilePicker
-            label='Banner Image'
+            label='Banner Image/Video'
             name='image'
-            accept='image/*'
+            accept='image/*,video/mp4'
             onChange={handleChange}
             file={selectedFile}
-            helper='*jpg, *png files are allowed   max file 50mb'
+            helper='*jpg, *png, *mp4 files are allowed   max file 50mb'
           />
         </div>
         <div className='flex justify-end gap-2 mt-4 p-8'>

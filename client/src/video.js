@@ -22,6 +22,7 @@ let bannerImages = []
 let bannerInterval = null
 let currentBannerIndex = 0
 let isStandby = false
+let playedSongId = null
 
 console.log('video.js loaded')
 
@@ -267,9 +268,14 @@ window.electronAPI.onVideoControl((command) => {
         if (!audioContext) setupAudioContext()
 
         const songId = command.id
+        // simpen song id ke playedSongId biar gak keputer kalo kecepetan ganti lagu sebelum selesai download
+        playedSongId = songId
 
         ensureSongDownloaded(songId)
           .then((localPath) => {
+            if (playedSongId !== songId) {
+              return
+            }
             videoElement.src = `file://${localPath}`
             videoElement.load()
           })
@@ -420,6 +426,7 @@ function resetIdleTimer() {
 }
 
 async function playIdleVideo() {
+  if (isIdlePlaying) return
   console.log('[Idle] Trying to play idle mode...')
   isIdlePlaying = true
   window.electronAPI.sendToMain('video-is-idle')
