@@ -436,7 +436,7 @@ async function playIdleVideo() {
   if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo()
 
   bannerImages = await window.electronAPI.getBannerImages()
-  console.log('[Idle] Found banner images:', bannerImages)
+  console.log('[Idle] Found banner media:', bannerImages)
 
   if (bannerImages.length === 0) {
     // Fallback ke idle video
@@ -453,23 +453,72 @@ async function playIdleVideo() {
 function showBannerCarousel() {
   const carousel = document.getElementById('idle-carousel')
   const img = document.getElementById('carousel-image')
+  const video = document.getElementById('carousel-video')
+
   idleVideoElement.style.display = 'none'
   carousel.style.display = 'block'
 
   currentBannerIndex = 0
-  img.src = bannerImages[currentBannerIndex]
+  showCurrentMedia()
 
-  bannerInterval = setInterval(() => {
+  function showCurrentMedia() {
+    const currentMedia = bannerImages[currentBannerIndex]
+
+    // Hide both elements first
+    img.style.display = 'none'
+    video.style.display = 'none'
+
+    if (currentMedia.type === 'image') {
+      img.src = currentMedia.src
+      img.style.display = 'block'
+
+      // Set timeout for next image (5 seconds)
+      bannerInterval = setTimeout(() => {
+        nextMedia()
+      }, 5000)
+    } else if (currentMedia.type === 'video') {
+      video.src = currentMedia.src
+      video.style.display = 'block'
+
+      // Event listener for when video ends
+      const onVideoEnd = () => {
+        video.removeEventListener('ended', onVideoEnd)
+        nextMedia()
+      }
+
+      video.addEventListener('ended', onVideoEnd)
+      video.play().catch(console.error)
+    }
+  }
+
+  function nextMedia() {
+    // Clear any existing timeout
+    if (bannerInterval) {
+      clearTimeout(bannerInterval)
+      bannerInterval = null
+    }
+
     currentBannerIndex = (currentBannerIndex + 1) % bannerImages.length
-    img.src = bannerImages[currentBannerIndex]
-  }, 5000) // ganti gambar setiap 5 detik
+    showCurrentMedia()
+  }
 }
 
 function stopBannerCarousel() {
   const carousel = document.getElementById('idle-carousel')
+  const video = document.getElementById('carousel-video')
+
   carousel.style.display = 'none'
+
+  // Stop video if playing
+  if (video) {
+    video.pause()
+    video.currentTime = 0
+    video.src = ''
+  }
+
+  // Clear interval/timeout
   if (bannerInterval) {
-    clearInterval(bannerInterval)
+    clearTimeout(bannerInterval)
     bannerInterval = null
   }
 }

@@ -427,10 +427,13 @@ ipcMain.handle('get-banner-images', async () => {
   try {
     const bannersDir = path.join(basePath, 'storage', 'banners')
     const files = fs.readdirSync(bannersDir)
-    const images = files
-      .filter((f) => /\.(jpg|jpeg|png)$/i.test(f))
-      .map((f) => 'file://' + path.join(bannersDir, f).replace(/\\/g, '/'))
-    return images
+    const mediaFiles = files
+      .filter((f) => /\.(jpg|jpeg|png|mp4)$/i.test(f))
+      .map((f) => ({
+        src: 'file://' + path.join(bannersDir, f).replace(/\\/g, '/'),
+        type: /\.(mp4)$/i.test(f) ? 'video' : 'image'
+      }))
+    return mediaFiles
   } catch (e) {
     return []
   }

@@ -36,7 +36,7 @@ const SongList = ({ handleAddToPlaylist, songs, onSelectSong, selectedSong, isYo
       <div className='w-full h-full'>
         <AutoSizer>
           {({ height, width }) => (
-            <List height={height} itemCount={songs.length} itemSize={50} width={width}>
+            <List height={height} itemCount={songs.length} itemSize={80} width={width}>
               {Row}
             </List>
           )}

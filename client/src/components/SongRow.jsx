@@ -16,7 +16,7 @@ const SongRow = ({ song, isSelected, onSelectSong, handleAddToPlaylist, isYoutub
           handleAddToPlaylist(song)
         }
       }}
-      className={`grid grid-cols-3 p-2 rounded-md cursor-pointer transition-all ${
+      className={`grid grid-cols-3 p-3 rounded-md cursor-pointer transition-all text-[2.5rem] ${
         isSelected ? 'bg-brand-green-light text-black' : 'hover:bg-white hover:bg-opacity-10'
       }`}
       onClick={() => onSelectSong(song)}>

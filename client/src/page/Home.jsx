@@ -295,24 +295,65 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
         playlistScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
       }
 
-      // Play lagu kedua
-      if (playlist.length > 1) {
-        playSongAtIndex(1)
+      // Play lagu kedua tanpa play
+      if (!selectedSong) {
+        setSelectedSong(playlist[0])
+        return
+      }
+      if (playlist[1]) {
+        const firstSong = playlist[1]
+        setSelectedSong(firstSong)
       }
     }
   }
 
   const handleUp = () => {
-    // play lagu sebelumnya
-    if (currentSongIndex > 0) {
-      playSongAtIndex(currentSongIndex - 1)
+    // // play lagu sebelumnya
+    // if (currentSongIndex > 0) {
+    //   playSongAtIndex(currentSongIndex - 1)
+    // }
+    // Select lagu sebelumnya (tanpa play)
+    if (!selectedSong) {
+      setSelectedSong(playlist[0])
+      return
+    }
+    const currentSongIndex = playlist.findIndex((song) => song.id === selectedSong.id)
+    if (playlist[currentSongIndex - 1]) {
+      // scroll ke atas
+      if (playlistScrollRef.current) {
+        const songElements = playlistScrollRef.current.children
+        if (songElements[currentSongIndex - 1]) {
+          songElements[currentSongIndex - 1].scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      }
+
+      const prevSong = playlist[currentSongIndex - 1]
+      setSelectedSong(prevSong)
     }
   }
 
   const handleDown = () => {
-    // play lagu berikutnya
-    if (currentSongIndex < playlist.length - 1) {
-      playSongAtIndex(currentSongIndex + 1)
+    // // play lagu berikutnya
+    // if (currentSongIndex < playlist.length - 1) {
+    //   playSongAtIndex(currentSongIndex + 1)
+    // }
+    // Select lagu berikutnya (tanpa play)
+    // cari index dari selectedSong
+    if (!selectedSong) {
+      setSelectedSong(playlist[0])
+      return
+    }
+    const currentSongIndex = playlist.findIndex((song) => song.id === selectedSong.id)
+    if (playlist[currentSongIndex + 1]) {
+      // scroll ke bawah
+      if (playlistScrollRef.current) {
+        const songElements = playlistScrollRef.current.children
+        if (songElements[currentSongIndex + 1]) {
+          songElements[currentSongIndex + 1].scrollIntoView({ behavior: 'smooth', block: 'end' })
+        }
+      }
+      const nextSong = playlist[currentSongIndex + 1]
+      setSelectedSong(nextSong)
     }
   }
 
@@ -330,7 +371,7 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
               isYoutubeMode={mode === 'youtube'}
             />
           </div>
-          <div className='row-span-2 flex gap-4 mt-4 text-2xl'>
+          <div className='row-span-2 flex gap-4 mt-4 text-3xl'>
             <button
               onClick={() => {
                 if (mode === 'youtube' || mode === 'new') {
@@ -386,30 +427,30 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
             onPlaySong={(song) => playSongAtIndex(playlist.indexOf(song))}
             currentSong={currentSong}
           />
-          <div className='row-span-2 flex justify-between gap-4 mt-4 text-2xl'>
+          <div className='row-span-2 flex justify-between gap-1 mt-4 text-2xl'>
             <button
               onClick={handleUp}
               className='flex bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-2 px-2 rounded-lg transition-all items-center justify-center'>
-              <CircleArrowUp width={40} height={40} />
+              <CircleArrowUp width={30} height={30} />
             </button>
             <button
               onClick={handleDown}
               className='flex bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-2 px-2 rounded-lg transition-all items-center justify-center'>
-              <CircleArrowDown width={40} height={40} />
+              <CircleArrowDown width={30} height={30} />
             </button>
             <button
               onClick={handleTop}
-              className='flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all'>
+              className='flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-2 rounded-lg transition-all'>
               TOP
             </button>
             <button
               onClick={handleDelete}
-              className='flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all'>
+              className='flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-2 rounded-lg transition-all'>
               DEL
             </button>
             <button
               onClick={handleClearPlaylist}
-              className='flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all'>
+              className='flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-2 rounded-lg transition-all'>
               CLR
             </button>
           </div>

@@ -24,7 +24,7 @@ export default function App() {
     window.electronAPI.onAppReady(() => {
       console.log('App is ready!')
       isAppReadyRef.current = true
-      // window.electronAPI.startKeyBlocker()
+      window.electronAPI.startKeyBlocker()
     })
 
     setTimeout(() => {

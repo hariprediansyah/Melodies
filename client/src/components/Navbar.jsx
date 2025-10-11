@@ -85,7 +85,7 @@ const Navbar = ({ onSearch, query, setQuery, mode }) => {
             <Search className='text-gray-400' />
             <input
               type='text'
-              placeholder='Search for songs or artists...'
+              placeholder='Search for songs'
               value={query}
               onChange={(e) => {
                 const search = e.target.value
@@ -106,7 +106,7 @@ const Navbar = ({ onSearch, query, setQuery, mode }) => {
                   handleSearch(e.target.value)
                 }
               }}
-              className='bg-transparent w-full h-12 px-4 text-white placeholder-gray-400 focus:outline-none bg-black bg-opacity-30'
+              className='bg-transparent w-full h-12 px-4 text-white placeholder-gray-400 focus:outline-none bg-black bg-opacity-30 text-3xl'
             />
           </form>
         </div>
