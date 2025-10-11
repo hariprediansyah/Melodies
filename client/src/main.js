@@ -371,6 +371,32 @@ ipcMain.handle('sync-playlist-remove-all', async () => {
   }
 })
 
+ipcMain.handle('sync-playlist-swap', async (_, songId1, songId2) => {
+  try {
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+    if (!songId1 || !songId2) throw new Error('songId1 and songId2 are required')
+
+    const payload = {
+      room_id,
+      song_id_1: songId1,
+      song_id_2: songId2
+    }
+
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    await fetch(`http://${server_ip}/playlist/swap`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    return true
+  } catch (err) {
+    console.error('Failed to sync playlist swap:', err)
+    return false
+  }
+})
+
 ipcMain.handle('fileExists', (_, filePath) => {
   return fs.existsSync(filePath)
 })

@@ -19,6 +19,7 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
   const [isPlaying, setIsPlaying] = useState(false)
   const [selectedSong, setSelectedSong] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [isSwapping, setIsSwapping] = useState(false)
   const songsPerPage = 10
 
   const playlistRef = useRef([])
@@ -306,54 +307,98 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
       }
     }
   }
-
-  const handleUp = () => {
-    // // play lagu sebelumnya
-    // if (currentSongIndex > 0) {
-    //   playSongAtIndex(currentSongIndex - 1)
-    // }
-    // Select lagu sebelumnya (tanpa play)
-    if (!selectedSong) {
-      setSelectedSong(playlist[0])
+  const handleUp = async () => {
+    if (isSwapping || !selectedSong) {
+      if (!selectedSong) setSelectedSong(playlist[0])
       return
     }
-    const currentSongIndex = playlist.findIndex((song) => song.id === selectedSong.id)
-    if (playlist[currentSongIndex - 1]) {
-      // scroll ke atas
+
+    const currentIndex = playlist.findIndex((song) => song.id === selectedSong.id)
+
+    // Skip if already at the top
+    if (currentIndex <= 0) {
+      return
+    }
+
+    // Get the songs that need to be swapped based on current frontend state
+    const songToMove = playlist[currentIndex] // The selected song (moves up)
+    const songAbove = playlist[currentIndex - 1] // The song above (moves down)
+
+    setIsSwapping(true)
+
+    try {
+      // Sync to server FIRST to ensure server state is updated before local state
+      await window.electronAPI.syncPlaylistSwap(songToMove.id, songAbove.id)
+
+      ;[songAbove.id, songToMove.id] = [songToMove.id, songAbove.id]
+
+      // Update local state only after server confirms success
+      const newPlaylist = [...playlist]
+      newPlaylist[currentIndex - 1] = songToMove
+      newPlaylist[currentIndex] = songAbove
+
+      setPlaylist(newPlaylist)
+      setSelectedSong(songToMove) // Keep the same song selected (now at new position)
+
+      // Scroll to the new position
       if (playlistScrollRef.current) {
         const songElements = playlistScrollRef.current.children
-        if (songElements[currentSongIndex - 1]) {
-          songElements[currentSongIndex - 1].scrollIntoView({ behavior: 'smooth', block: 'start' })
+        if (songElements[currentIndex - 1]) {
+          songElements[currentIndex - 1].scrollIntoView({ behavior: 'smooth', block: 'start' })
         }
       }
-
-      const prevSong = playlist[currentSongIndex - 1]
-      setSelectedSong(prevSong)
+    } catch (error) {
+      console.error('Failed to swap songs:', error)
+      // No need to revert since we didn't update local state yet
+    } finally {
+      setIsSwapping(false)
     }
   }
-
-  const handleDown = () => {
-    // // play lagu berikutnya
-    // if (currentSongIndex < playlist.length - 1) {
-    //   playSongAtIndex(currentSongIndex + 1)
-    // }
-    // Select lagu berikutnya (tanpa play)
-    // cari index dari selectedSong
-    if (!selectedSong) {
-      setSelectedSong(playlist[0])
+  const handleDown = async () => {
+    if (isSwapping || !selectedSong) {
+      if (!selectedSong) setSelectedSong(playlist[0])
       return
     }
-    const currentSongIndex = playlist.findIndex((song) => song.id === selectedSong.id)
-    if (playlist[currentSongIndex + 1]) {
-      // scroll ke bawah
+
+    const currentIndex = playlist.findIndex((song) => song.id === selectedSong.id)
+
+    // Skip if already at the bottom
+    if (currentIndex >= playlist.length - 1) {
+      return
+    }
+
+    // Get the songs that need to be swapped based on current frontend state
+    const songToMove = playlist[currentIndex] // The selected song (moves down)
+    const songBelow = playlist[currentIndex + 1] // The song below (moves up)
+
+    setIsSwapping(true)
+
+    try {
+      // Sync to server FIRST to ensure server state is updated before local state
+      await window.electronAPI.syncPlaylistSwap(songToMove.id, songBelow.id)
+
+      ;[songBelow.id, songToMove.id] = [songToMove.id, songBelow.id]
+
+      // Update local state only after server confirms success
+      const newPlaylist = [...playlist]
+      newPlaylist[currentIndex + 1] = songToMove
+      newPlaylist[currentIndex] = songBelow
+
+      setPlaylist(newPlaylist)
+      setSelectedSong(songToMove) // Keep the same song selected (now at new position)
+
+      // Scroll to the new position
       if (playlistScrollRef.current) {
         const songElements = playlistScrollRef.current.children
-        if (songElements[currentSongIndex + 1]) {
-          songElements[currentSongIndex + 1].scrollIntoView({ behavior: 'smooth', block: 'end' })
+        if (songElements[currentIndex + 1]) {
+          songElements[currentIndex + 1].scrollIntoView({ behavior: 'smooth', block: 'end' })
         }
       }
-      const nextSong = playlist[currentSongIndex + 1]
-      setSelectedSong(nextSong)
+    } catch (error) {
+      console.error('Failed to swap songs:', error)
+      // No need to revert since we didn't update local state yet
+    } finally {
+      setIsSwapping(false)
     }
   }
 
@@ -430,12 +475,22 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
           <div className='row-span-2 flex justify-between gap-1 mt-4 text-2xl'>
             <button
               onClick={handleUp}
-              className='flex bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-2 px-2 rounded-lg transition-all items-center justify-center'>
+              disabled={isSwapping}
+              className={`flex border font-bold py-2 px-2 rounded-lg transition-all items-center justify-center ${
+                isSwapping
+                  ? 'bg-gray-600 bg-opacity-50 text-gray-400 cursor-not-allowed'
+                  : 'bg-black bg-opacity-50 hover:bg-opacity-40 border-white/10 hover:border-gray-600 text-white hover:cursor-pointer'
+              }`}>
               <CircleArrowUp width={30} height={30} />
             </button>
             <button
               onClick={handleDown}
-              className='flex bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-2 px-2 rounded-lg transition-all items-center justify-center'>
+              disabled={isSwapping}
+              className={`flex border font-bold py-2 px-2 rounded-lg transition-all items-center justify-center ${
+                isSwapping
+                  ? 'bg-gray-600 bg-opacity-50 text-gray-400 cursor-not-allowed'
+                  : 'bg-black bg-opacity-50 hover:bg-opacity-40 border-white/10 hover:border-gray-600 text-white hover:cursor-pointer'
+              }`}>
               <CircleArrowDown width={30} height={30} />
             </button>
             <button

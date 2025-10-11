@@ -676,10 +676,9 @@ app.get('/playlist', async (req, res) => {
   if (!roomId) return res.status(400).json({ success: false, error: 'room_id required' })
   try {
     const [playlist] = await pool.query(
-      'SELECT a.room_id, a.id, a.title, a.artist, a.video_url, a.is_youtube, b.vocal FROM song_playlist a left join songs b on a.id = b.id WHERE a.room_id=?',
+      'SELECT a.room_id, a.id, a.title, a.artist, a.video_url, a.is_youtube, b.vocal FROM song_playlist a left join songs b on a.id = b.id WHERE a.room_id=? ORDER BY CAST(a.id AS UNSIGNED) ASC',
       [roomId]
     )
-    console.log(playlist)
 
     res.json(playlist)
   } catch (err) {
@@ -744,6 +743,53 @@ app.delete('/playlist', async (req, res) => {
     res.json({ success: true })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/playlist/swap', async (req, res) => {
+  const { room_id, song_id_1, song_id_2 } = req.body
+  const conn = await pool.getConnection()
+  try {
+    if (!room_id || !song_id_1 || !song_id_2) {
+      return res.status(400).json({ success: false, error: 'room_id, song_id_1, and song_id_2 are required' })
+    }
+
+    await conn.beginTransaction()
+
+    // Get current positions of both songs
+    const [songs] = await conn.query(
+      'SELECT id, title, artist, video_url, is_youtube FROM song_playlist WHERE room_id=? AND id IN (?, ?) ORDER BY id',
+      [room_id, song_id_1, song_id_2]
+    )
+
+    if (songs.length !== 2) {
+      await conn.rollback()
+      return res.status(404).json({ success: false, error: 'One or both songs not found in playlist' })
+    }
+
+    // Since we can't directly swap in MySQL without knowing the positions,
+    // we'll use a temporary approach by updating one song to have a temporary ID
+    // and then swap the IDs
+
+    // First, set one song to a temporary negative ID (to avoid conflicts)
+    const tempId = -Math.abs(song_id_1) // Use negative version of song_id_1 as temp
+    await conn.query('UPDATE song_playlist SET id = ? WHERE room_id = ? AND id = ?', [tempId, room_id, song_id_1])
+
+    // Then set the second song to the first song's original ID
+    await conn.query('UPDATE song_playlist SET id = ? WHERE room_id = ? AND id = ?', [song_id_1, room_id, song_id_2])
+
+    // Finally set the first song (now with temp ID) to the second song's original ID
+    await conn.query('UPDATE song_playlist SET id = ? WHERE room_id = ? AND id = ?', [song_id_2, room_id, tempId])
+
+    await conn.commit()
+    console.log(`Swapped songs ${song_id_1} and ${song_id_2} in room ${room_id}`)
+    res.json({ success: true })
+  } catch (err) {
+    await conn.rollback()
+    console.log(err)
+    res.status(500).json({ success: false, error: err.message })
+  } finally {
+    conn.release()
   }
 })
 

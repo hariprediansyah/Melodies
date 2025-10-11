@@ -61,6 +61,26 @@ class Util {
     }
   }
 
+  static async syncPlaylistSwap(songId1, songId2) {
+    try {
+      const room_id = await window.electronAPI.getSysParam('client_room_id')
+      const server_ip = await window.electronAPI.getSysParam('server_ip')
+      if (!room_id) throw new Error('room_id not found')
+      const payload = {
+        room_id,
+        song_id_1: songId1,
+        song_id_2: songId2
+      }
+      await fetch(`http://${server_ip}/playlist/swap`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+    } catch (err) {
+      console.error('Failed to sync playlist swap:', err)
+    }
+  }
+
   static async getCarouselPath(filename) {
     const baseDir = await window.electronAPI.getStorageBaseDir()
     return `file://${baseDir}/banners/${filename}`
