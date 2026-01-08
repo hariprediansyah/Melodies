@@ -60,24 +60,24 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
 
   // Fetch playlist dari server saat mount (lewat IPC)
   useEffect(() => {
-    async function fetchPlaylistFromServer() {
-      try {
-        const data = await window.electronAPI.syncPlaylistGet()
-        console.log(data)
-
-        setPlaylist(
-          data.map((song) => ({
-            ...song,
-            isYoutube: !!song.is_youtube,
-            video_url: song.video_url
-          }))
-        )
-      } catch (err) {
-        console.error('Failed to fetch playlist from server:', err)
-      }
-    }
     fetchPlaylistFromServer()
   }, [])
+
+  async function fetchPlaylistFromServer() {
+    try {
+      const data = await window.electronAPI.syncPlaylistGet()
+      console.log(data)
+      const newPlaylist = data.map((song) => ({
+        ...song,
+        isYoutube: !!song.is_youtube,
+        video_url: song.video_url
+      }))
+      setPlaylist(newPlaylist)
+      return newPlaylist
+    } catch (err) {
+      console.error('Failed to fetch playlist from server:', err)
+    }
+  }
 
   // Tambahkan ke playlist dan sync ke server (lewat IPC)
   const handleNewEntry = () => {
@@ -286,25 +286,40 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
     playSongAtIndex(prevIndex)
   }, [currentSongIndex, playlist.length, playSongAtIndex])
 
-  const handleTop = () => {
-    console.log(playlistScrollRef.current)
+  const handleTop = async () => {
+    if (isSwapping || !selectedSong) {
+      if (!selectedSong) setSelectedSong(playlist[0])
+      return
+    }
 
-    if (playlist.length > 0) {
-      // Scroll to top
+    const currentIndex = playlist.findIndex((song) => song.id === selectedSong.id)
+
+    // Skip if already at the top
+    if (currentIndex <= 0) {
+      return
+    }
+
+    setIsSwapping(true)
+
+    try {
+      // Sync to server FIRST to ensure server state is updated before local state
+      await window.electronAPI.syncPlaylistMoveToTop(selectedSong.id)
+      const newPlaylist = await fetchPlaylistFromServer()
+      const movedSong = newPlaylist[0]
+
+      setSelectedSong(movedSong) // Keep the same song selected (now at new position)
+
+      // Scroll to the top
       if (playlistScrollRef.current) {
-        console.log('Scrolled to top of playlist')
-        playlistScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+        const songElements = playlistScrollRef.current.children
+        if (songElements.length > 0) {
+          songElements[0].scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
       }
-
-      // Play lagu kedua tanpa play
-      if (!selectedSong) {
-        setSelectedSong(playlist[0])
-        return
-      }
-      if (playlist[1]) {
-        const firstSong = playlist[1]
-        setSelectedSong(firstSong)
-      }
+    } catch (error) {
+      console.error('Failed to move song to top:', error)
+    } finally {
+      setIsSwapping(false)
     }
   }
   const handleUp = async () => {
@@ -329,7 +344,6 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
     try {
       // Sync to server FIRST to ensure server state is updated before local state
       await window.electronAPI.syncPlaylistSwap(songToMove.id, songAbove.id)
-
       ;[songAbove.id, songToMove.id] = [songToMove.id, songAbove.id]
 
       // Update local state only after server confirms success
@@ -337,6 +351,7 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
       newPlaylist[currentIndex - 1] = songToMove
       newPlaylist[currentIndex] = songAbove
 
+      console.log(newPlaylist)
       setPlaylist(newPlaylist)
       setSelectedSong(songToMove) // Keep the same song selected (now at new position)
 
@@ -376,7 +391,6 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
     try {
       // Sync to server FIRST to ensure server state is updated before local state
       await window.electronAPI.syncPlaylistSwap(songToMove.id, songBelow.id)
-
       ;[songBelow.id, songToMove.id] = [songToMove.id, songBelow.id]
 
       // Update local state only after server confirms success

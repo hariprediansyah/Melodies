@@ -397,6 +397,30 @@ ipcMain.handle('sync-playlist-swap', async (_, songId1, songId2) => {
   }
 })
 
+ipcMain.handle('sync-playlist-move-to-top', async (_, songId) => {
+  try {
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+    if (!songId) throw new Error('songId is required')
+
+    const payload = {
+      room_id,
+      song_id: songId
+    }
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    await fetch(`http://${server_ip}/playlist/move-to-top`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    return true
+  } catch (err) {
+    console.error('Failed to sync playlist move to top:', err)
+    return false
+  }
+})
+
 ipcMain.handle('fileExists', (_, filePath) => {
   return fs.existsSync(filePath)
 })

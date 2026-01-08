@@ -793,6 +793,106 @@ app.post('/playlist/swap', async (req, res) => {
   }
 })
 
+app.post('/playlist/move-to-top', async (req, res) => {
+  const { room_id, song_id } = req.body
+  const conn = await pool.getConnection()
+  try {
+    if (!room_id || !song_id) {
+      return res.status(400).json({ success: false, error: 'room_id and song_id are required' })
+    }
+
+    await conn.beginTransaction()
+
+    // Kunci target dan ambil ID terkecil (top)
+    const [[songRows], [topRows]] = await Promise.all([
+      conn.query(`SELECT id FROM song_playlist WHERE room_id=? AND id=? FOR UPDATE`, [room_id, song_id]),
+      conn.query(`SELECT id FROM song_playlist WHERE room_id=? ORDER BY CAST(id AS SIGNED) ASC LIMIT 1 FOR UPDATE`, [
+        room_id
+      ])
+    ])
+    if (songRows.length !== 1) {
+      await conn.rollback()
+      return res.status(404).json({ success: false, error: 'Song not found in this room' })
+    }
+    if (topRows.length !== 1) {
+      await conn.rollback()
+      return res.status(404).json({ success: false, error: 'Playlist is empty' })
+    }
+
+    const curId = songRows[0].id
+    const firstId = topRows[0].id
+    if (curId === firstId) {
+      await conn.commit()
+      return res.json({ success: true, moved: false })
+    }
+
+    // Ambil segmen [first .. cur] terurut numerik ASC
+    const [segRows] = await conn.query(
+      `SELECT id 
+       FROM song_playlist 
+       WHERE room_id=? 
+         AND CAST(id AS SIGNED) <= CAST(? AS SIGNED)
+       ORDER BY CAST(id AS SIGNED) ASC`,
+      [room_id, curId]
+    )
+    // contoh: seg = [A(=firstId), B, C(=curId)]
+    const seg = segRows.map((r) => r.id)
+    if (seg.length === 0 || seg[0] !== firstId || seg[seg.length - 1] !== curId) {
+      await conn.rollback()
+      return res.status(409).json({ success: false, error: 'Segment detection failed' })
+    }
+
+    // 1) Naikkan ke namespace sementara agar tidak bentrok PK
+    // UPDATE ... SET id = CONCAT('__tmp__', id) WHERE id IN (seg)
+    const tmpPrefix = '__tmp__'
+    const placeholders = seg.map(() => '?').join(',')
+    await conn.query(
+      `UPDATE song_playlist 
+       SET id = CONCAT(?, id) 
+       WHERE room_id=? AND id IN (${placeholders})`,
+      [tmpPrefix, room_id, ...seg]
+    )
+
+    // 2) Mapping balik (rotasi):
+    //   cur -> first
+    //   seg[i] -> seg[i+1]  (untuk i dari 0..len-2)
+    // Sumber bernama: '__tmp__'+oldId
+    const cases = []
+    const params = []
+    // cur -> first
+    cases.push(`WHEN ? THEN ?`)
+    params.push(tmpPrefix + curId, String(firstId))
+    // A->B, B->C, ...
+    for (let i = 0; i < seg.length - 1; i++) {
+      const from = tmpPrefix + seg[i]
+      const to = String(seg[i + 1])
+      cases.push(`WHEN ? THEN ?`)
+      params.push(from, to)
+    }
+    // WHERE filter hanya pada sumber tmp
+    const tmpList = seg.map((id) => tmpPrefix + id)
+    const wherePlaceholders = tmpList.map(() => '?').join(',')
+
+    await conn.query(
+      `UPDATE song_playlist 
+       SET id = CASE id ${cases.join(' ')} END
+       WHERE room_id=? AND id IN (${wherePlaceholders})`,
+      [...params, room_id, ...tmpList]
+    )
+
+    await conn.commit()
+    res.json({ success: true, moved: true, newTopId: String(firstId) })
+  } catch (err) {
+    try {
+      await conn.rollback()
+    } catch {}
+    console.error(err)
+    res.status(500).json({ success: false, error: err.message })
+  } finally {
+    if (conn) conn.release()
+  }
+})
+
 // Endpoint untuk trigger scan MAC address dan update IP
 app.post('/scan-mac', async (req, res) => {
   try {

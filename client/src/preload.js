@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   syncPlaylistRemoveAll: () => ipcRenderer.invoke('sync-playlist-remove-all'),
   syncPlaylistGet: () => ipcRenderer.invoke('sync-playlist-get'),
   syncPlaylistSwap: (songId1, songId2) => ipcRenderer.invoke('sync-playlist-swap', songId1, songId2),
+  syncPlaylistMoveToTop: (songId) => ipcRenderer.invoke('sync-playlist-move-to-top', songId),
 
   // Call Log Management
   makeCall: () => ipcRenderer.invoke('make-call'),
