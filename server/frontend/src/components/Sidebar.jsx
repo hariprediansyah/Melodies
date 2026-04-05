@@ -26,18 +26,18 @@ const mainMenu = [
       </svg>
     )
   },
-  {
-    key: 'songs',
-    label: 'Library Songs',
-    icon: (
-      <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'>
-        <path
-          d='M10.975 3.00199C11.0335 3.26057 10.987 3.53181 10.8456 3.75609C10.7042 3.98037 10.4795 4.13931 10.221 4.19799C8.55813 4.57714 7.05995 5.47781 5.94511 6.76855C4.83027 8.05929 4.15711 9.67255 4.02388 11.3729C3.89066 13.0732 4.30433 14.7716 5.20453 16.2203C6.10473 17.6689 7.44434 18.7919 9.02786 19.4254C10.6114 20.059 12.3559 20.1698 14.0069 19.7418C15.6579 19.3139 17.1289 18.3694 18.2052 17.0464C19.2815 15.7234 19.9069 14.091 19.9899 12.3875C20.073 10.684 19.6095 8.99847 18.667 7.57699C18.5943 7.4676 18.5439 7.34496 18.5186 7.21608C18.4933 7.0872 18.4936 6.9546 18.5196 6.82585C18.572 6.56583 18.7256 6.33729 18.9465 6.19049C19.1674 6.04369 19.4376 5.99067 19.6976 6.04309C19.8264 6.06904 19.9488 6.1201 20.0578 6.19335C20.1668 6.2666 20.2603 6.3606 20.333 6.46999C21.4227 8.10821 22.0027 10.0325 22 12C22 17.523 17.523 22 12 22C6.477 22 2 17.523 2 12C2 7.23999 5.325 3.25799 9.779 2.24799C10.0376 2.18945 10.3088 2.23599 10.5331 2.37738C10.7574 2.51877 10.9163 2.74344 10.975 3.00199ZM13 3.01399C12.9999 2.86398 13.0332 2.71583 13.0975 2.58029C13.1618 2.44476 13.2554 2.32525 13.3717 2.23044C13.4879 2.13564 13.6239 2.06792 13.7696 2.03221C13.9153 1.9965 14.0671 1.99369 14.214 2.02399L14.329 2.05499L17.316 3.05099C17.5587 3.13119 17.7614 3.30125 17.8826 3.52626C18.0038 3.75126 18.0343 4.01413 17.9677 4.26089C17.9012 4.50764 17.7427 4.71955 17.5247 4.8531C17.3068 4.98664 17.0461 5.03169 16.796 4.97899L16.684 4.94899L15 4.38699V12C14.9997 12.6282 14.8022 13.2406 14.4353 13.7505C14.0684 14.2605 13.5506 14.6425 12.9551 14.8425C12.3595 15.0425 11.7162 15.0505 11.1158 14.8653C10.5155 14.6802 9.98841 14.3112 9.60896 13.8105C9.22952 13.3097 9.01685 12.7025 9.00096 12.0745C8.98507 11.4464 9.16675 10.8292 9.52038 10.3099C9.87401 9.79066 10.3817 9.39551 10.972 9.18022C11.5622 8.96493 12.2051 8.94036 12.81 9.10999L13 9.16999V3.01499V3.01399Z'
-          fill='white'
-        />
-      </svg>
-    )
-  },
+  // {
+  //   key: 'songs',
+  //   label: 'Library Songs',
+  //   icon: (
+  //     <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'>
+  //       <path
+  //         d='M10.975 3.00199C11.0335 3.26057 10.987 3.53181 10.8456 3.75609C10.7042 3.98037 10.4795 4.13931 10.221 4.19799C8.55813 4.57714 7.05995 5.47781 5.94511 6.76855C4.83027 8.05929 4.15711 9.67255 4.02388 11.3729C3.89066 13.0732 4.30433 14.7716 5.20453 16.2203C6.10473 17.6689 7.44434 18.7919 9.02786 19.4254C10.6114 20.059 12.3559 20.1698 14.0069 19.7418C15.6579 19.3139 17.1289 18.3694 18.2052 17.0464C19.2815 15.7234 19.9069 14.091 19.9899 12.3875C20.073 10.684 19.6095 8.99847 18.667 7.57699C18.5943 7.4676 18.5439 7.34496 18.5186 7.21608C18.4933 7.0872 18.4936 6.9546 18.5196 6.82585C18.572 6.56583 18.7256 6.33729 18.9465 6.19049C19.1674 6.04369 19.4376 5.99067 19.6976 6.04309C19.8264 6.06904 19.9488 6.1201 20.0578 6.19335C20.1668 6.2666 20.2603 6.3606 20.333 6.46999C21.4227 8.10821 22.0027 10.0325 22 12C22 17.523 17.523 22 12 22C6.477 22 2 17.523 2 12C2 7.23999 5.325 3.25799 9.779 2.24799C10.0376 2.18945 10.3088 2.23599 10.5331 2.37738C10.7574 2.51877 10.9163 2.74344 10.975 3.00199ZM13 3.01399C12.9999 2.86398 13.0332 2.71583 13.0975 2.58029C13.1618 2.44476 13.2554 2.32525 13.3717 2.23044C13.4879 2.13564 13.6239 2.06792 13.7696 2.03221C13.9153 1.9965 14.0671 1.99369 14.214 2.02399L14.329 2.05499L17.316 3.05099C17.5587 3.13119 17.7614 3.30125 17.8826 3.52626C18.0038 3.75126 18.0343 4.01413 17.9677 4.26089C17.9012 4.50764 17.7427 4.71955 17.5247 4.8531C17.3068 4.98664 17.0461 5.03169 16.796 4.97899L16.684 4.94899L15 4.38699V12C14.9997 12.6282 14.8022 13.2406 14.4353 13.7505C14.0684 14.2605 13.5506 14.6425 12.9551 14.8425C12.3595 15.0425 11.7162 15.0505 11.1158 14.8653C10.5155 14.6802 9.98841 14.3112 9.60896 13.8105C9.22952 13.3097 9.01685 12.7025 9.00096 12.0745C8.98507 11.4464 9.16675 10.8292 9.52038 10.3099C9.87401 9.79066 10.3817 9.39551 10.972 9.18022C11.5622 8.96493 12.2051 8.94036 12.81 9.10999L13 9.16999V3.01499V3.01399Z'
+  //         fill='white'
+  //       />
+  //     </svg>
+  //   )
+  // },
   {
     key: 'banner',
     label: 'Content Banner',
@@ -83,7 +83,7 @@ const bottomMenu = [
   }
 ]
 
-export default function Sidebar({ activeMenu, onMenuChange }) {
+export default function Sidebar({ activeMenu, onMenuChange, logout }) {
   const handleMenuClick = (menuKey) => {
     if (onMenuChange) {
       onMenuChange(menuKey)
@@ -91,18 +91,45 @@ export default function Sidebar({ activeMenu, onMenuChange }) {
   }
 
   return (
-    <aside className='w-64 bg-gray-900 h-full flex flex-col justify-between py-6 px-4'>
+    <aside className='w-64 bg-[#1f1f1f] h-full flex flex-col justify-between py-0'>
       <div>
-        <div className='text-3xl font-bold bg-gradient-to-r from-fuchsia to-purple bg-clip-text text-transparent mb-10 select-none'>
-          Melodies
+        {/* Logo */}
+        <div className='bg-[#1a1a1a] p-4 mb-4'>
+          <div className='flex flex-col items-center justify-center p-4'>
+            <img src='./logo_horizontal.png' alt='GREEN HOUSE' className='w-60 mb-1' />
+          </div>
         </div>
-        <nav className='flex flex-col gap-2'>
-          {mainMenu.map((item) => (
+
+        {/* Main Navigation */}
+        <nav className='flex flex-col'>
+          {/* Dashboard Button */}
+          <button
+            key='dashboard'
+            onClick={() => handleMenuClick('dashboard')}
+            className={`flex items-center gap-3 px-4 py-3 transition font-medium text-base w-full text-left ${
+              activeMenu === 'dashboard' ? 'bg-green-900 text-white' : 'text-white/80 hover:bg-green-900'
+            }`}>
+            <svg width='24' height='24' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'>
+              <rect width='24' height='24' rx='4' fill={activeMenu === 'dashboard' ? '#1e40af' : 'transparent'} />
+              <path
+                d='M4 5C4 4.73478 4.10536 4.48043 4.29289 4.29289C4.48043 4.10536 4.73478 4 5 4H9C9.26522 4 9.51957 4.10536 9.70711 4.29289C9.89464 4.48043 10 4.73478 10 5V10C10 10.2652 9.89464 10.5196 9.70711 10.7071C9.51957 10.8946 9.26522 11 9 11H5C4.73478 11 4.48043 10.8946 4.29289 10.7071C4.10536 10.5196 4 10.2652 4 10V5ZM14 5C14 4.73478 14.1054 4.48043 14.2929 4.29289C14.4804 4.10536 14.7348 4 15 4H19C19.2652 4 19.5196 4.10536 19.7071 4.29289C19.8946 4.48043 20 4.73478 20 5V7C20 7.26522 19.8946 7.51957 19.7071 7.70711C19.5196 7.89464 19.2652 8 19 8H15C14.7348 8 14.4804 7.89464 14.2929 7.70711C14.1054 7.51957 14 7.26522 14 7V5ZM4 16C4 15.7348 4.10536 15.4804 4.29289 15.2929C4.48043 15.1054 4.73478 15 5 15H9C9.26522 15 9.51957 15.1054 9.70711 15.2929C9.89464 15.4804 10 15.7348 10 16V19C10 19.2652 9.89464 19.5196 9.70711 19.7071C9.51957 19.8946 9.26522 20 9 20H5C4.73478 20 4.48043 19.8946 4.29289 19.7071C4.10536 19.5196 4 19.2652 4 19V16ZM14 13C14 12.7348 14.1054 12.4804 14.2929 12.2929C14.4804 12.1054 14.7348 12 15 12H19C19.2652 12 19.5196 12.1054 19.7071 12.2929C19.8946 12.4804 20 12.7348 20 13V19C20 19.2652 19.8946 19.5196 19.7071 19.7071C19.5196 19.8946 19.2652 20 19 20H15C14.7348 20 14.4804 19.8946 14.2929 19.7071C14.1054 19.5196 14 19.2652 14 19V13Z'
+                stroke='white'
+                strokeWidth='2'
+              />
+            </svg>
+            Dashboard
+          </button>
+
+          {/* Manage Section */}
+          <div className='text-xs text-gray-500 uppercase px-4 py-2 mt-4'>Manage</div>
+
+          {/* Other Menu Items */}
+          {mainMenu.slice(1).map((item) => (
             <button
               key={item.key}
               onClick={() => handleMenuClick(item.key)}
-              className={`flex items-center gap-3 px-4 py-2 rounded-lg transition font-medium text-base w-full text-left ${
-                activeMenu === item.key ? 'bg-[#EE10B0] text-white' : 'text-white/80 hover:bg-[#EE10B0]'
+              className={`flex items-center gap-3 px-4 py-3 transition font-medium text-base w-full text-left ${
+                activeMenu === item.key ? 'bg-green-900 text-white' : 'text-white/80 hover:bg-green-900'
               }`}>
               {item.icon}
               {item.label}
@@ -110,27 +137,31 @@ export default function Sidebar({ activeMenu, onMenuChange }) {
           ))}
         </nav>
       </div>
-      <div className='flex flex-col gap-2 mb-2'>
+
+      {/* Bottom Menu */}
+      <div className='flex flex-col'>
         {bottomMenu.map((item) => (
           <button
             key={item.key}
             onClick={() => handleMenuClick(item.key)}
-            className={`flex items-center gap-3 px-4 py-2 rounded-lg transition font-medium text-base w-full text-left ${
-              activeMenu === item.key ? 'bg-[#EE10B0] text-white' : 'text-white/80 hover:bg-[#EE10B0]'
+            className={`flex items-center gap-3 px-4 py-3 transition font-medium text-base w-full text-left ${
+              activeMenu === item.key ? 'bg-green-900 text-white' : 'text-white/80 hover:bg-green-900'
             }`}>
             {item.icon}
             {item.label}
           </button>
         ))}
-        <div className='flex items-center gap-3 px-4 py-2'>
+
+        {/* Admin Section */}
+        <div className='flex items-center gap-3 px-4 py-3 border-t border-gray-800'>
           <div className='bg-[#272727] rounded-full p-1'>
-            <svg className='w-6 h-6' fill='none' stroke='#EE10B0' viewBox='0 0 24 24'>
+            <svg className='w-6 h-6' fill='none' stroke='#4ade80' viewBox='0 0 24 24'>
               <circle cx='12' cy='8' r='4' strokeWidth='2' />
               <path d='M6 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2' strokeWidth='2' />
             </svg>
           </div>
           <p className='text-white'>Admin</p>
-          <button className='flex items-center justify-center gap-3 px-4 py-2 rounded-lg transition font-medium text-base text-red-400 ml-auto'>
+          <button className='flex items-center justify-center text-red-400 ml-auto' onClick={logout}>
             <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'>
               <path
                 d='M15 3H7C6.46957 3 5.96086 3.21071 5.58579 3.58579C5.21071 3.96086 5 4.46957 5 5V19C5 19.5304 5.21071 20.0391 5.58579 20.4142C5.96086 20.7893 6.46957 21 7 21H15M19 12L15 8M19 12L15 16M19 12H9'

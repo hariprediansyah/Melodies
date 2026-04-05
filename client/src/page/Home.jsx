@@ -1,105 +1,549 @@
-import 'slick-carousel/slick/slick.css'
-import 'slick-carousel/slick/slick-theme.css'
-import Slider from 'react-slick'
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import SongList from '../components/SongList'
+import Playlist from '../components/Playlist'
+import PlayerControls from '../components/PlayerControls'
+import DateDisplay from '../components/DateDisplay'
+import { Youtube, ListMusic, ListPlus, CircleArrowUp, CircleArrowDown } from 'lucide-react'
 import Util from '../Util'
-import { ImageCarousel } from '../Components'
 
-export default function Home({ onLibrary, onPlaylist, onYoutube }) {
-  const [carouselData, setCarouselData] = useState([])
+export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuery, mode, setMode }) {
+  const [playlist, setPlaylist] = useState([])
+  const [localSongs, setLocalSongs] = useState([])
+  const [allSongs, setAllSongs] = useState([])
+  const [youtubeSongs, setYoutubeSongs] = useState([])
+  const [newSongs, setNewSongs] = useState([])
+  const [config, setConfig] = useState(null)
+  const [youtubeRecommendations, setYoutubeRecommendations] = useState([])
 
-  const [idx, setIdx] = useState(0)
-  const [fade, setFade] = useState(false)
+  const [currentSongIndex, setCurrentSongIndex] = useState(-1)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [selectedSong, setSelectedSong] = useState(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [isSwapping, setIsSwapping] = useState(false)
+  const songsPerPage = 10
 
-  const settings = {
-    dots: false,
-    infinite: true,
-    speed: 700,
-    slidesToShow: 1,
-    slidesToScroll: 1,
-    autoplay: true,
-    autoplaySpeed: 5000,
-    arrows: false,
-    beforeChange: (oldIndex, newIndex) => {
-      setFade(true)
-      setTimeout(() => {
-        setIdx(newIndex)
-        setFade(false)
-      }, 350)
-    },
-    afterChange: (current) => {
-      setIdx(current)
+  const playlistRef = useRef([])
+  const playlistScrollRef = useRef(null)
+  const currentIndexRef = useRef(-1)
+
+  useEffect(() => {
+    playlistRef.current = playlist
+    currentIndexRef.current = currentSongIndex
+  }, [playlist, currentSongIndex])
+
+  const currentSong = currentSongIndex > -1 ? playlist[currentSongIndex] : null
+  const displayedSongs = mode === 'youtube' ? youtubeSongs : mode === 'local' ? localSongs : newSongs
+
+  // Pagination logic
+  const indexOfLastSong = currentPage * songsPerPage
+  const indexOfFirstSong = indexOfLastSong - songsPerPage
+  // const currentSongs = displayedSongs.slice(indexOfFirstSong, indexOfLastSong)
+  const totalPages = Math.ceil(displayedSongs.length / songsPerPage)
+
+  const paginate = (pageNumber) => {
+    if (pageNumber > 0 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber)
+    }
+  }
+  // Fetch local songs and config on mount
+  useEffect(() => {
+    window.electronAPI
+      .getSongs()
+      .then((songs) => {
+        setAllSongs(songs)
+        console.log('songs', songs)
+      })
+      .catch(console.error)
+    window.electronAPI.getConfig().then(setConfig).catch(console.error)
+    window.electronAPI.youtubeRecommend().then(setYoutubeRecommendations).catch(console.error)
+  }, [])
+
+  // Fetch playlist dari server saat mount (lewat IPC)
+  useEffect(() => {
+    fetchPlaylistFromServer()
+  }, [])
+
+  async function fetchPlaylistFromServer() {
+    try {
+      const data = await window.electronAPI.syncPlaylistGet()
+      console.log(data)
+      const newPlaylist = data.map((song) => ({
+        ...song,
+        isYoutube: !!song.is_youtube,
+        video_url: song.video_url
+      }))
+      setPlaylist(newPlaylist)
+      return newPlaylist
+    } catch (err) {
+      console.error('Failed to fetch playlist from server:', err)
     }
   }
 
-  useEffect(() => {
-    async function loadData() {
-      const carousels = await window.electronAPI.getData('banners')
-      console.log('carousels', carousels)
-
-      setCarouselData(carousels)
+  // Tambahkan ke playlist dan sync ke server (lewat IPC)
+  const handleNewEntry = () => {
+    // Display 20 newest songs
+    if (mode != 'new') {
+      setSearchQuery('')
+      setQuery('')
+      const sortedSongs = allSongs.sort(
+        (a, b) => new Date(b.created_at || b.timeInput) - new Date(a.created_at || a.timeInput)
+      )
+      setNewSongs(sortedSongs.slice(0, 20))
+      setMode('new')
     }
-    loadData()
+  }
+
+  const handleAddToPlaylist = (selectedSong) => {
+    if (!selectedSong) return
+    if (selectedSong && !playlist.find((p) => p.id == selectedSong.id)) {
+      selectedSong.isYoutube = mode === 'youtube'
+      if (mode === 'youtube') {
+        selectedSong.video_url = `https://www.youtube.com/embed/${selectedSong.id}`
+      } else {
+        selectedSong.video_url = selectedSong.id // id file asli disimpan di video_url untuk keperluan pemutaran
+      }
+      setPlaylist([...playlist, selectedSong])
+      window.electronAPI.syncPlaylistAdd(selectedSong)
+      window.electronAPI.youtubeRecommend().then(setYoutubeRecommendations).catch(console.error)
+      console.log('Added to playlist:', selectedSong)
+      console.log('playlist', playlist)
+
+      if (playlist.length === 0) {
+        playSongAtIndex(0, [...playlist, selectedSong]) // Play the first song if it's the only one
+      }
+    }
+  }
+
+  const handleClearPlaylist = () => {
+    window.electronAPI.syncPlaylistRemoveAll()
+    window.electronAPI.sendVideoControl({ type: 'STOP' })
+    setSelectedSong(null)
+    setPlaylist([])
+    setCurrentSongIndex(-1)
+    setIsPlaying(false)
+  }
+
+  // Hapus dari playlist dan sync ke server (lewat IPC)
+  const handleDelete = () => {
+    if (selectedSong) {
+      const newPlaylist = playlist.filter((p) => p.id !== selectedSong.id)
+      setPlaylist(newPlaylist)
+      window.electronAPI.syncPlaylistRemove(selectedSong.id)
+      if (currentSong && currentSong.id === selectedSong.id) {
+        setCurrentSongIndex(-1)
+        setIsPlaying(false)
+        window.electronAPI.sendVideoControl({ type: 'STOP' })
+      }
+    }
+  }
+
+  // Saat lagu selesai, hapus dari playlist dan sync ke server (lewat IPC)
+  useEffect(() => {
+    const handleSongEnd = () => {
+      const playlist = playlistRef.current
+      const currentSongIndex = currentIndexRef.current
+      if (currentSongIndex > -1 && playlist.length > 0) {
+        const songId = playlist[currentSongIndex]?.id
+        const newPlaylist = playlist.filter((_, i) => i !== currentSongIndex)
+        if (songId) window.electronAPI.syncPlaylistRemove(songId)
+        if (newPlaylist.length > 0) {
+          const nextIndex = currentSongIndex >= newPlaylist.length ? 0 : currentSongIndex
+          setPlaylist(newPlaylist)
+          setTimeout(() => {
+            setCurrentSongIndex(nextIndex)
+            setSelectedSong(newPlaylist[nextIndex])
+            playSongAtIndex(nextIndex, newPlaylist) // gunakan playlist terbaru
+          }, 0)
+        } else {
+          setPlaylist(newPlaylist)
+          setCurrentSongIndex(-1)
+          setSelectedSong(null)
+          setIsPlaying(false)
+        }
+      }
+    }
+    window.electronAPI.onVideoEnded(handleSongEnd)
+
+    const handleAddToPlaylist = (song) => {
+      if (song && !playlist.find((p) => p.id === song.id)) {
+        setPlaylist([...playlist, song])
+      }
+    }
+    window.electronAPI.onAddToPlaylist(handleAddToPlaylist)
+
+    return () => {
+      // Cleanup if necessary, though electronAPI might not support removing listeners
+    }
   }, [])
 
+  // Handle search query changes
+  useEffect(() => {
+    if (!searchQuery) {
+      if (mode === 'youtube') {
+        setYoutubeSongs(youtubeRecommendations)
+        return
+      }
+    }
+
+    if (mode === 'youtube') {
+      if (config?.youtubeApiKey) {
+        // window.electronAPI.searchYoutube(config.youtubeApiKey, searchQuery).then((results) => {
+        //   if (!results.error) {
+        //     setYoutubeSongs(results)
+        //   } else {
+        //     console.error(results.error)
+        //   }
+        // })
+        window.electronAPI
+          .searchYoutubeNew(searchQuery)
+          .then((results) => {
+            if (!results.error) {
+              setYoutubeSongs(results)
+            } else {
+              console.error(results.error)
+            }
+          })
+          .catch(console.error)
+      }
+    } else if (mode === 'new') {
+      const sortedSongs = allSongs.sort(
+        (a, b) => new Date(b.created_at || b.timeInput) - new Date(a.created_at || a.timeInput)
+      )
+      const filtered = sortedSongs.filter(
+        (song) =>
+          song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          song.artist.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      setNewSongs(filtered.slice(0, 20))
+    } else {
+      const filtered = allSongs.filter(
+        (song) =>
+          song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          song.artist.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      setLocalSongs(filtered)
+    }
+  }, [searchQuery, mode, config, allSongs])
+
+  const playSongAtIndex = useCallback(
+    async (index, customPlaylist) => {
+      const pl = customPlaylist || playlist
+      if (index < 0 || index >= pl.length) {
+        setIsPlaying(false)
+        setCurrentSongIndex(-1)
+        window.electronAPI.sendVideoControl({ type: 'SET_NEXT_SONG_TITLE', title: '' })
+        return
+      }
+      setCurrentSongIndex(index)
+      setIsPlaying(true)
+      const song = pl[index]
+
+      const nextIndex = (index + 1) % pl.length
+      const nextSong = pl[nextIndex]
+      window.electronAPI.sendVideoControl({
+        type: 'SET_NEXT_SONG_TITLE',
+        title: nextSong && pl.length > 1 ? nextSong.title : ''
+      })
+
+      const storagePath = await window.electronAPI.getStorageBaseDir()
+      let videoSrc
+      if (song.isYoutube) {
+        videoSrc = song.video_url
+      } else {
+        // video_url = id file asli
+        videoSrc = `file://${storagePath}/songs/${song.video_url}/song.mp4`
+      }
+
+      window.electronAPI.sendVideoControl({
+        type: 'LOAD',
+        src: videoSrc,
+        isYoutube: !!song.isYoutube,
+        id: song.video_url,
+        idOriginal: song.id // id file asli untuk keperluan lain
+      })
+    },
+    [playlist]
+  )
+
+  const handlePlayPause = useCallback(() => {
+    if (!currentSong) {
+      if (playlist.length > 0) {
+        playSongAtIndex(0)
+      }
+      return
+    }
+
+    const newIsPlaying = !isPlaying
+    setIsPlaying(newIsPlaying)
+    window.electronAPI.sendVideoControl({ type: newIsPlaying ? 'PLAY' : 'PAUSE' })
+  }, [currentSong, isPlaying, playlist, playSongAtIndex])
+
+  const handleNext = useCallback(() => {
+    if (currentSongIndex > -1 && playlist.length > 1) {
+      window.electronAPI.sendVideoControl({ type: 'STOP' })
+      const nextIndex = currentSongIndex + 1
+      const newPlaylist = playlist.filter((_, i) => i !== currentSongIndex)
+      window.electronAPI.syncPlaylistRemove(currentSong.id)
+
+      setPlaylist(newPlaylist)
+      if (newPlaylist.length > 0) {
+        const adjustedIndex = nextIndex > currentSongIndex ? nextIndex - 1 : nextIndex
+        playSongAtIndex(adjustedIndex % newPlaylist.length, newPlaylist)
+      }
+    }
+  }, [currentSongIndex, playlist, playSongAtIndex, currentSong?.id])
+
+  const handlePrev = useCallback(() => {
+    const prevIndex = currentSongIndex - 1 < 0 ? playlist.length - 1 : currentSongIndex - 1
+    playSongAtIndex(prevIndex)
+  }, [currentSongIndex, playlist.length, playSongAtIndex])
+
+  const handleTop = async () => {
+    if (isSwapping || !selectedSong) {
+      if (!selectedSong) setSelectedSong(playlist[0])
+      return
+    }
+
+    const currentIndex = playlist.findIndex((song) => String(song.id) === String(selectedSong.id))
+
+    // Skip if already at the top
+    if (currentIndex <= 1) {
+      return
+    }
+
+    setIsSwapping(true)
+
+    try {
+      // Sync to server FIRST to ensure server state is updated before local state
+      await window.electronAPI.syncPlaylistMoveToTop(selectedSong.id)
+      const newPlaylist = await fetchPlaylistFromServer()
+
+      setPlaylist(newPlaylist) // Update local playlist with server response
+
+      // Find the moved song by ID (it should now be at position 2 / index 1)
+      const movedSong = newPlaylist.find((s) => String(s.id) === String(selectedSong.id)) || newPlaylist[1]
+
+      if (movedSong) {
+        setSelectedSong(movedSong) // Keep the same song selected (now at new position)
+      }
+
+      // Scroll to position 2
+      if (playlistScrollRef.current) {
+        const songElements = playlistScrollRef.current.children
+        if (songElements.length > 1) {
+          songElements[1].scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to move song to top:', error)
+    } finally {
+      setIsSwapping(false)
+    }
+  }
+  const handleUp = async () => {
+    if (isSwapping || !selectedSong) {
+      if (!selectedSong) setSelectedSong(playlist[0])
+      return
+    }
+
+    const currentIndex = playlist.findIndex((song) => song.id === selectedSong.id)
+
+    // Skip if already at the top
+    if (currentIndex <= 0) {
+      return
+    }
+
+    // Get the songs that need to be swapped based on current frontend state
+    const songToMove = playlist[currentIndex] // The selected song (moves up)
+    const songAbove = playlist[currentIndex - 1] // The song above (moves down)
+
+    setIsSwapping(true)
+
+    try {
+      // Sync to server FIRST to ensure server state is updated before local state
+      await window.electronAPI.syncPlaylistSwap(songToMove.id, songAbove.id)
+
+      // Update local state only after server confirms success
+      const newPlaylist = [...playlist]
+      newPlaylist[currentIndex - 1] = songToMove
+      newPlaylist[currentIndex] = songAbove
+
+      console.log(newPlaylist)
+      setPlaylist(newPlaylist)
+      setSelectedSong(songToMove) // Keep the same song selected (now at new position)
+
+      // Scroll to the new position
+      if (playlistScrollRef.current) {
+        const songElements = playlistScrollRef.current.children
+        if (songElements[currentIndex - 1]) {
+          songElements[currentIndex - 1].scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to swap songs:', error)
+      // No need to revert since we didn't update local state yet
+    } finally {
+      setIsSwapping(false)
+    }
+  }
+  const handleDown = async () => {
+    if (isSwapping || !selectedSong) {
+      if (!selectedSong) setSelectedSong(playlist[0])
+      return
+    }
+
+    const currentIndex = playlist.findIndex((song) => song.id === selectedSong.id)
+
+    // Skip if already at the bottom
+    if (currentIndex >= playlist.length - 1) {
+      return
+    }
+
+    // Get the songs that need to be swapped based on current frontend state
+    const songToMove = playlist[currentIndex] // The selected song (moves down)
+    const songBelow = playlist[currentIndex + 1] // The song below (moves up)
+
+    setIsSwapping(true)
+
+    try {
+      // Sync to server FIRST to ensure server state is updated before local state
+      await window.electronAPI.syncPlaylistSwap(songToMove.id, songBelow.id)
+
+      // Update local state only after server confirms success
+      const newPlaylist = [...playlist]
+      newPlaylist[currentIndex + 1] = songToMove
+      newPlaylist[currentIndex] = songBelow
+
+      setPlaylist(newPlaylist)
+      setSelectedSong(songToMove) // Keep the same song selected (now at new position)
+
+      // Scroll to the new position
+      if (playlistScrollRef.current) {
+        const songElements = playlistScrollRef.current.children
+        if (songElements[currentIndex + 1]) {
+          songElements[currentIndex + 1].scrollIntoView({ behavior: 'smooth', block: 'end' })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to swap songs:', error)
+      // No need to revert since we didn't update local state yet
+    } finally {
+      setIsSwapping(false)
+    }
+  }
+
   return (
-    <main className='pb-8 grid grid-rows-12 gap-6 h-full'>
-      {carouselData.length > 0 && (
-        <div className='relative rounded-2xl overflow-hidden w-full flex items-stretch row-span-10'>
-          <div className='absolute inset-0 w-full h-full z-0'>
-            <Slider {...settings} slickGoTo={idx}>
-              {carouselData.map((item, i) => (
-                <div key={i} className='w-full h-full'>
-                  <ImageCarousel filename={item.id + '.jpg'} />
-                </div>
-              ))}
-            </Slider>
-            <div className='absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-10' />
+    <div className='row-span-14 p-4'>
+      <div className='grid grid-cols-3 gap-8 h-full'>
+        {/* Left Column */}
+        <div className='col-span-2 grid grid-rows-15 gap-2 h-full overflow-hidden'>
+          <div className='row-span-11 '>
+            <SongList
+              handleAddToPlaylist={handleAddToPlaylist}
+              songs={displayedSongs} // semua data
+              onSelectSong={setSelectedSong}
+              selectedSong={selectedSong}
+              isYoutubeMode={mode === 'youtube'}
+            />
           </div>
-          <div
-            className={`relative z-20 flex flex-col justify-end p-12 h-full w-1/2 transition-opacity duration-500 ${
-              fade ? 'opacity-0' : 'opacity-100'
-            }`}>
-            <h1 className='text-4xl font-bold mb-2 whitespace-pre-line'>{carouselData[idx].title}</h1>
-            <p className='mb-4 text-sm text-gray-200 max-w-xl'>{carouselData[idx].desc}</p>
-            <div className='flex gap-2 mt-4'>
-              {carouselData.map((_, i) => (
-                <div
-                  key={i}
-                  className={`w-3 h-3 rounded-full border-none focus:outline-none ${
-                    i === idx ? 'bg-fuchsia-500' : 'bg-gray-400/60'
-                  }`}
-                  aria-label={`Go to slide ${i + 1}`}
-                />
-              ))}
-            </div>
+          <div className='row-span-2 flex gap-4 mt-4 text-3xl'>
+            <button
+              onClick={() => {
+                if (mode === 'youtube' || mode === 'new') {
+                  setLocalSongs(allSongs)
+                  setSearchQuery('')
+                  setQuery('')
+                }
+                setMode('local')
+              }}
+              className={`flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all ${
+                mode === 'local' ? 'bg-green-700' : ''
+              }`}>
+              <ListMusic /> Bank Music
+            </button>
+            <button
+              onClick={() => {
+                if (mode != 'youtube') {
+                  setYoutubeSongs(youtubeRecommendations)
+                  setMode('youtube')
+                }
+              }}
+              className={`flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all ${
+                mode === 'youtube' ? 'bg-green-700' : ''
+              }`}>
+              <img src='youtube.png' width={30} />
+              YouTube
+            </button>
+            <button
+              onClick={handleNewEntry}
+              className={`flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-4 px-4 rounded-lg flex items-center justify-center gap-2 transition-all ${
+                mode === 'new' ? 'bg-green-700' : ''
+              }`}>
+              <ListPlus /> New Entry
+            </button>
+          </div>
+          <PlayerControls
+            isPlaying={isPlaying}
+            onPlayPause={handlePlayPause}
+            onNext={handleNext}
+            onPrev={handlePrev}
+            currentSong={currentSong}
+          />
+        </div>
+
+        {/* Right Column */}
+        <div className='col-span-1 grid grid-rows-12 gap-4 h-full overflow-hidden'>
+          <DateDisplay />
+          <Playlist
+            ref={playlistScrollRef}
+            playlist={playlist}
+            onSelectSong={setSelectedSong}
+            selectedSong={selectedSong}
+            onPlaySong={(song) => {
+              const index = playlist.findIndex((s) => String(s.id) === String(song.id))
+              playSongAtIndex(index)
+            }}
+            currentSong={currentSong}
+          />
+          <div className='row-span-2 flex justify-between gap-1 mt-4 text-2xl'>
+            <button
+              onClick={handleUp}
+              disabled={isSwapping}
+              className={`flex border font-bold py-2 px-2 rounded-lg transition-all items-center justify-center ${
+                isSwapping
+                  ? 'bg-gray-600 bg-opacity-50 text-gray-400 cursor-not-allowed'
+                  : 'bg-black bg-opacity-50 hover:bg-opacity-40 border-white/10 hover:border-gray-600 text-white hover:cursor-pointer'
+              }`}>
+              <CircleArrowUp width={30} height={30} />
+            </button>
+            <button
+              onClick={handleDown}
+              disabled={isSwapping}
+              className={`flex border font-bold py-2 px-2 rounded-lg transition-all items-center justify-center ${
+                isSwapping
+                  ? 'bg-gray-600 bg-opacity-50 text-gray-400 cursor-not-allowed'
+                  : 'bg-black bg-opacity-50 hover:bg-opacity-40 border-white/10 hover:border-gray-600 text-white hover:cursor-pointer'
+              }`}>
+              <CircleArrowDown width={30} height={30} />
+            </button>
+            <button
+              onClick={handleTop}
+              className='flex-1 bg-black bg-opacity-50 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-2 rounded-lg transition-all'>
+              TOP
+            </button>
+            <button
+              onClick={handleDelete}
+              className='flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-2 rounded-lg transition-all'>
+              DEL
+            </button>
+            <button
+              onClick={handleClearPlaylist}
+              className='flex-1 bg-black bg-opacity-20 hover:bg-opacity-40 border border-white/10 hover:border-gray-600 text-white font-bold py-3 px-2 rounded-lg transition-all'>
+              CLR
+            </button>
           </div>
         </div>
-      )}
-      <div className='flex gap-6 row-span-2'>
-        <button
-          className='flex-1 flex items-center justify-center gap-2 bg-[#23232b] py-6 rounded-xl text-lg font-semibold hover:bg-[#2d2d38] transition'
-          onClick={() => window.electronAPI.loadYouTubeTV()}>
-          <img src='youtube.png' className='w-7 h-7' alt='YouTube' /> YouTube
-        </button>
-        <button
-          className='flex-1 flex items-center justify-center gap-2 bg-[#23232b] py-6 rounded-xl text-lg font-semibold hover:bg-[#2d2d38] transition'
-          onClick={onLibrary}>
-          <svg className='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-            <rect x='3' y='4' width='18' height='16' rx='2' strokeWidth='2' />
-          </svg>{' '}
-          Library
-        </button>
-        <button
-          className='flex-1 flex items-center justify-center gap-2 bg-[#23232b] py-6 rounded-xl text-lg font-semibold hover:bg-[#2d2d38] transition'
-          onClick={onPlaylist}>
-          <svg className='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-            <circle cx='12' cy='12' r='10' strokeWidth='2' />
-            <path d='M12 8v4l3 3' strokeWidth='2' />
-          </svg>{' '}
-          Your Playlist
-        </button>
       </div>
-    </main>
+    </div>
   )
 }

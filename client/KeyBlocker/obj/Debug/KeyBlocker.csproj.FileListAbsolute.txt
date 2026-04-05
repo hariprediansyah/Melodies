@@ -1,0 +1,9 @@
+E:\Work\SKYLERA\_PROJ\Melodies\client\KeyBlocker\bin\Debug\KeyBlocker.exe.config
+E:\Work\SKYLERA\_PROJ\Melodies\client\KeyBlocker\bin\Debug\KeyBlocker.exe
+E:\Work\SKYLERA\_PROJ\Melodies\client\KeyBlocker\bin\Debug\KeyBlocker.pdb
+E:\Work\SKYLERA\_PROJ\Melodies\client\KeyBlocker\obj\Debug\KeyBlocker.csproj.AssemblyReference.cache
+E:\Work\SKYLERA\_PROJ\Melodies\client\KeyBlocker\obj\Debug\KeyBlocker.Properties.Resources.resources
+E:\Work\SKYLERA\_PROJ\Melodies\client\KeyBlocker\obj\Debug\KeyBlocker.csproj.GenerateResource.cache
+E:\Work\SKYLERA\_PROJ\Melodies\client\KeyBlocker\obj\Debug\KeyBlocker.csproj.CoreCompileInputs.cache
+E:\Work\SKYLERA\_PROJ\Melodies\client\KeyBlocker\obj\Debug\KeyBlocker.exe
+E:\Work\SKYLERA\_PROJ\Melodies\client\KeyBlocker\obj\Debug\KeyBlocker.pdb

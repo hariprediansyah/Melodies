@@ -2,10 +2,13 @@ const path = require('path')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
 
 module.exports = {
-  entry: './src/renderer.js',
+  entry: {
+    main: './src/renderer.js',
+    video: './src/video.js'
+  },
   output: {
     path: path.resolve(__dirname, 'public'),
-    filename: 'bundle.js',
+    filename: '[name].bundle.js',
     publicPath: './' // Important for Electron file paths
   },
   module: {
@@ -39,6 +42,7 @@ module.exports = {
       template: './src/index.html',
       inject: 'body',
       filename: 'index.html',
+      chunks: ['main'], // Only include main bundle
       meta: {
         'Content-Security-Policy': {
           'http-equiv': 'Content-Security-Policy',
@@ -48,35 +52,7 @@ module.exports = {
       }
     })
   ],
-  target: 'electron-renderer', // Specific target for Electron renderer
-  externals: {
-    // Exclude Node.js and Electron modules from bundling
-    electron: 'commonjs2 electron',
-    fs: 'commonjs2 fs',
-    path: 'commonjs2 path'
-  },
-  node: {
-    __dirname: false,
-    __filename: false
-  },
   resolve: {
-    extensions: ['.js', '.jsx', '.json'],
-    fallback: {
-      // Polyfills for Node.js core modules
-      fs: false,
-      path: require.resolve('path-browserify'),
-      os: require.resolve('os-browserify/browser'),
-      stream: require.resolve('stream-browserify')
-    }
-  },
-  // Development server configuration (optional)
-  devServer: {
-    static: {
-      directory: path.join(__dirname, 'public')
-    },
-    compress: true,
-    port: 9000,
-    hot: true,
-    historyApiFallback: true
+    extensions: ['.js', '.jsx']
   }
 }

@@ -4,11 +4,24 @@ import { InputField } from '../components/Components'
 
 export default function AddEditRoom({ mode, roomId, onBack }) {
   const isEdit = mode === 'edit'
-  const [form, setForm] = useState({ name: '', description: '', status: 'Active', macAddress: '' })
+  const [form, setForm] = useState({ name: '', description: '', status: 'Inactive', macAddress: '' })
   const [loading, setLoading] = useState(isEdit)
   const [submitting, setSubmitting] = useState(false)
+  const [macAddresses, setMacAddresses] = useState([])
 
   useEffect(() => {
+    // Fetch MAC addresses from master_mac table
+    const fetchMacAddresses = async () => {
+      try {
+        const macs = await roomAPI.getMacAddresses()
+        setMacAddresses(macs)
+      } catch (error) {
+        console.error('Failed to fetch MAC addresses:', error)
+      }
+    }
+
+    fetchMacAddresses()
+
     if (isEdit && roomId) {
       setLoading(true)
       roomAPI.getAll().then((rooms) => {
@@ -55,13 +68,10 @@ export default function AddEditRoom({ mode, roomId, onBack }) {
   return (
     <div>
       <div className='flex items-center mb-6'>
-        <button onClick={onBack} className='mr-4 text-fuchsia font-bold text-lg'>
-          &larr; Back
-        </button>
         <div className='text-2xl font-bold'>{isEdit ? 'Edit Room' : 'Add New Room'}</div>
       </div>
       <form className='w-full shadow-lg' onSubmit={handleSubmit}>
-        <div className='bg-[#161f33] rounded-xl p-8'>
+        <div className='bg-grayBg rounded-xl p-8'>
           <InputField
             label='Room Name'
             name='name'
@@ -82,9 +92,11 @@ export default function AddEditRoom({ mode, roomId, onBack }) {
           <InputField
             label='MAC Address'
             name='macAddress'
+            type='select'
             value={form.macAddress}
             onChange={handleChange}
-            placeholder='Enter MAC Address'
+            options={macAddresses}
+            placeholder='Select MAC Address'
           />
         </div>
         <div className='flex justify-end gap-2 mt-4 p-8'>

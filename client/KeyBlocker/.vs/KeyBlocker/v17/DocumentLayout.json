@@ -1,0 +1,57 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "E:\\Work\\SKYLERA\\_PROJ\\Melodies\\client\\KeyBlocker\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{84D20282-FDFC-415D-9BAB-5B1B7A2ADE5C}|KeyBlocker.csproj|e:\\work\\skylera\\_proj\\melodies\\client\\keyblocker\\form1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{84D20282-FDFC-415D-9BAB-5B1B7A2ADE5C}|KeyBlocker.csproj|solutionrelative:form1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{84D20282-FDFC-415D-9BAB-5B1B7A2ADE5C}|KeyBlocker.csproj|e:\\work\\skylera\\_proj\\melodies\\client\\keyblocker\\form1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
+      "RelativeMoniker": "D:0:0:{84D20282-FDFC-415D-9BAB-5B1B7A2ADE5C}|KeyBlocker.csproj|solutionrelative:form1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{3fd5e0cc-709a-4f8c-94c3-7f0f8dff5bb2}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Form1.cs",
+              "DocumentMoniker": "E:\\Work\\SKYLERA\\_PROJ\\Melodies\\client\\KeyBlocker\\Form1.cs",
+              "RelativeDocumentMoniker": "Form1.cs",
+              "ToolTip": "E:\\Work\\SKYLERA\\_PROJ\\Melodies\\client\\KeyBlocker\\Form1.cs",
+              "RelativeToolTip": "Form1.cs",
+              "ViewState": "AQIAAJ4AAAAAAAAAAAAAAKwAAAAhAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-03T16:50:31.986Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Form1.cs [Design]",
+              "DocumentMoniker": "E:\\Work\\SKYLERA\\_PROJ\\Melodies\\client\\KeyBlocker\\Form1.cs",
+              "RelativeDocumentMoniker": "Form1.cs",
+              "ToolTip": "E:\\Work\\SKYLERA\\_PROJ\\Melodies\\client\\KeyBlocker\\Form1.cs [Design]",
+              "RelativeToolTip": "Form1.cs [Design]",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-03T16:50:21.716Z",
+              "EditorCaption": " [Design]"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

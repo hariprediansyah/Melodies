@@ -1,6 +1,4 @@
 {
-  "dbName": "melodies.sqlite",
-  "dbFolder": ".",
-  "storageFolder": "storage",
-  "env": "development"
+  "youtubeApiKey": "AIzaSyAn8pW6H4cOvxO9uzVhsH5FE7QRBRaZLt0",
+  "licenseKey": "ajsk8sa7dfb3i4fhf78yb2u3jhb"
 }

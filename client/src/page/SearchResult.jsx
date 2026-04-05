@@ -9,7 +9,7 @@ export default function SearchResult({ keyword, onBack, onOpenYoutube }) {
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
-      const songs = await window.electronAPI.getData('songs')
+      const songs = await window.electronAPI.getSongs()
       const filtered = songs.filter(
         (song) =>
           song.title?.toLowerCase().includes(keyword.toLowerCase()) ||
@@ -31,7 +31,7 @@ export default function SearchResult({ keyword, onBack, onOpenYoutube }) {
     <div className='px-8 py-6'>
       <div className='flex items-center mb-6'>
         <button className='text-purple flex items-center gap-2' onClick={onBack}>
-          <span className='text-xl'>&#8592;</span> <span>Kembali</span>
+          <span className='text-2xl'>&#8592;</span> <span>Kembali</span>
         </button>
         <h2 className='text-2xl font-semibold ml-6'>
           Hasil pencarian untuk: <span className='text-fuchsia-400'>{keyword}</span>

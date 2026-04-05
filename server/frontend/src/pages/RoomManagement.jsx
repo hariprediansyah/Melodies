@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { CustomTable } from '../components/Components'
+import { roomAPI } from '../services/api'
 
 const statusColor = {
   Active: 'text-green-400',
@@ -15,8 +16,7 @@ export default function RoomManagement({ onAdd, onEdit }) {
   // Fetch rooms from API
   const fetchRooms = async () => {
     try {
-      const response = await fetch('http://localhost:4000/rooms')
-      const data = await response.json()
+      const data = await roomAPI.getAll()
       setRooms(data)
     } catch (error) {
       console.error('Error fetching rooms:', error)
@@ -29,12 +29,17 @@ export default function RoomManagement({ onAdd, onEdit }) {
     fetchRooms()
   }, [])
 
-  const filteredRooms = rooms.filter((r) => r.name.toLowerCase().includes(search.toLowerCase()))
+  const filteredRooms = rooms.filter(
+    (r) =>
+      r.name.toLowerCase().includes(search.toLowerCase()) ||
+      (r.description && r.description.toLowerCase().includes(search.toLowerCase())) ||
+      (r.macAddress && r.macAddress.toLowerCase().includes(search.toLowerCase()))
+  )
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this room?')) {
       try {
-        await fetch(`http://localhost:4000/rooms/${id}`, { method: 'DELETE' })
+        await roomAPI.delete(id)
         fetchRooms()
       } catch (error) {
         console.error('Error deleting room:', error)
@@ -113,15 +118,43 @@ export default function RoomManagement({ onAdd, onEdit }) {
       <div className='flex justify-between items-center mb-4'>
         <div className='font-bold text-xl'>List Rooms</div>
         <div className='flex gap-2'>
-          <input
-            type='text'
-            placeholder='Search Room'
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className='px-4 py-2 rounded bg-gray-800 text-white outline-none'
-          />
+          <div className='relative'>
+            <div className='absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none'>
+              <svg
+                className='w-5 h-5 text-gray-400'
+                fill='none'
+                stroke='currentColor'
+                viewBox='0 0 24 24'
+                xmlns='http://www.w3.org/2000/svg'>
+                <path
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  strokeWidth='2'
+                  d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'></path>
+              </svg>
+            </div>
+            <input
+              type='text'
+              placeholder='Search rooms'
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className='pl-10 pr-10 py-2 rounded-lg bg-gray-700/50 text-white outline-none border border-gray-600 w-80'
+            />
+            {search && (
+              <button className='absolute inset-y-0 right-0 flex items-center pr-3' onClick={() => setSearch('')}>
+                <svg
+                  className='w-5 h-5 text-gray-400 hover:text-white'
+                  fill='none'
+                  stroke='currentColor'
+                  viewBox='0 0 24 24'
+                  xmlns='http://www.w3.org/2000/svg'>
+                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth='2' d='M6 18L18 6M6 6l12 12'></path>
+                </svg>
+              </button>
+            )}
+          </div>
           <button
-            className='bg-[#EE10B0] text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2'
+            className='bg-fuchsia text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2'
             onClick={onAdd}>
             <span>
               <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'>
@@ -141,7 +174,17 @@ export default function RoomManagement({ onAdd, onEdit }) {
           </button>
         </div>
       </div>
-      <CustomTable columns={columns} data={filteredRooms} rowsPerPage={10} renderCell={renderCell} />
+
+      {filteredRooms.length === 0 && search !== '' ? (
+        <div className='bg-[#1f1f1f] rounded-xl p-8 text-center'>
+          <div className='text-gray-200 mb-2'>No rooms found matching "{search}"</div>
+          <button onClick={() => setSearch('')} className='text-gray-400 underline hover:text-white'>
+            Clear search
+          </button>
+        </div>
+      ) : (
+        <CustomTable columns={columns} data={filteredRooms} rowsPerPage={10} renderCell={renderCell} />
+      )}
     </div>
   )
 }

@@ -4,7 +4,9 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        fuchsia: '#f014b4'
+        // fuchsia: '#f014b4'
+        fuchsia: '#163357',
+        grayBg: '#1f1f1f'
       }
     }
   },

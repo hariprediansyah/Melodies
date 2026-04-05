@@ -1,4 +1,6 @@
-import React, { useState, useRef } from 'react'
+import { Loader2, Power, Settings, Volume, Volume1, Volume2, X } from 'lucide-react'
+import React, { useState, useRef, useEffect } from 'react'
+import { roomAPI, systemAPI } from '../services/api'
 
 export const GlassCard = ({ className, children }) => {
   return (
@@ -32,7 +34,7 @@ export const InputField = ({
       <select
         name={name}
         required={required}
-        className='w-full px-4 py-2 rounded bg-gray-700 text-white outline-none'
+        className='w-full px-4 py-2 rounded bg-[#3a3a3a] text-white outline-none'
         value={value}
         onChange={onChange}
         {...props}>
@@ -50,7 +52,7 @@ export const InputField = ({
           type='date'
           name={name}
           required={required}
-          className={`w-full pl-10 pr-4 py-2 rounded bg-gray-700 text-white outline-none focus:ring-2 focus:ring-fuchsia transition`}
+          className={`w-full pl-10 pr-4 py-2 rounded bg-[#3a3a3a] text-white outline-none focus:ring-2 focus:ring-fuchsia transition`}
           value={value}
           onChange={onChange}
           placeholder={placeholder}
@@ -62,7 +64,7 @@ export const InputField = ({
         type={type}
         name={name}
         required={required}
-        className='w-full px-4 py-2 rounded bg-gray-700 text-white outline-none'
+        className='w-full px-4 py-2 rounded bg-[#3a3a3a] text-white outline-none'
         value={value}
         onChange={onChange}
         placeholder={placeholder}
@@ -81,7 +83,7 @@ export const FilePicker = ({ label, name, accept, onChange, file, helper, requir
         {required && <span className='text-fuchsia'>*</span>}
       </label>
     )}
-    <div className='flex items-center bg-gray-700 rounded px-4 py-2'>
+    <div className='flex items-center bg-[#3a3a3a] rounded px-4 py-2'>
       <input
         id={inputId || name + '-input'}
         type='file'
@@ -92,7 +94,7 @@ export const FilePicker = ({ label, name, accept, onChange, file, helper, requir
       />
       <label
         htmlFor={inputId || name + '-input'}
-        className='cursor-pointer text-fuchsia font-semibold whitespace-nowrap'>
+        className='cursor-pointer text-[#b1c953] font-semibold whitespace-nowrap'>
         Choose File
       </label>
       <span className='mx-2 text-gray-500'>|</span>
@@ -117,10 +119,10 @@ export const CustomTable = ({ columns = [], data = [], rowsPerPage = 10, renderC
 
   return (
     <div className={className}>
-      <div className='bg-gray-800 rounded-xl overflow-hidden'>
+      <div className='bg-[#3a3a3a] rounded-xl overflow-hidden'>
         <table className='w-full text-left'>
           <thead>
-            <tr className='bg-gray-900 text-white'>
+            <tr className='bg-[#1f1f1f] text-white'>
               {columns.map((col) => (
                 <th key={col.key} className='py-3 px-4'>
                   {col.label}
@@ -137,7 +139,7 @@ export const CustomTable = ({ columns = [], data = [], rowsPerPage = 10, renderC
               </tr>
             ) : (
               pagedData.map((row, idx) => (
-                <tr key={row.id || idx} className='border-b border-gray-900 hover:bg-gray-900 transition'>
+                <tr key={row.id || idx} className='border-b border-gray-900 hover:bg-[#525050] transition'>
                   {columns.map((col, cidx) => (
                     <td key={col.key} className='py-2 px-4 align-middle'>
                       {renderCell ? renderCell(col, row, idx + (page - 1) * rowsPerPage) : row[col.key]}
@@ -208,13 +210,10 @@ export const BannerForm = ({ initialData = {}, onSubmit, onCancel, loading }) =>
   return (
     <div>
       <div className='flex items-center mb-6'>
-        <button onClick={onCancel} className='mr-4 text-fuchsia font-bold text-lg' type='button'>
-          &larr; Back
-        </button>
         <div className='text-2xl font-bold'>{initialData && initialData.id ? 'Edit Banner' : 'Add New Banner'}</div>
       </div>
       <form className='w-full shadow-lg' onSubmit={handleSubmit} encType='multipart/form-data'>
-        <div className='bg-[#23232b] rounded-xl p-8'>
+        <div className='bg-grayBg rounded-xl p-8'>
           <InputField
             label='Title'
             name='title'
@@ -232,12 +231,12 @@ export const BannerForm = ({ initialData = {}, onSubmit, onCancel, loading }) =>
             placeholder='Enter Description'
           />
           <FilePicker
-            label='Banner Image'
+            label='Banner Image/Video'
             name='image'
-            accept='image/*'
+            accept='image/*,video/mp4'
             onChange={handleChange}
             file={selectedFile}
-            helper='*jpg, *png files are allowed   max file 50mb'
+            helper='*jpg, *png, *mp4 files are allowed   max file 50mb'
           />
         </div>
         <div className='flex justify-end gap-2 mt-4 p-8'>
@@ -310,4 +309,208 @@ export function useNotifStack() {
   }
 
   return { notifs, showNotif, onClose }
+}
+
+export function CardRoom({ room, handleStartSession, handleStopSession, showNotif, handleShutdown, isWaiting }) {
+  const [duration, setDuration] = useState('00:00:00')
+  const [modalVolumeOpen, setModalVolumeOpen] = useState(false)
+  const [volume, setVolume] = useState(0)
+  const [modalErrorOpen, setModalErrorOpen] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleVolume = async () => {
+    setLoading(true)
+    const resVolume = await systemAPI.getVolume(room.ip_address)
+    setLoading(false)
+    if (resVolume.success) {
+      setModalVolumeOpen(true)
+      setVolume(resVolume.data.volume)
+    } else {
+      setModalErrorOpen(true)
+      setErrorMessage(resVolume.error || resVolume.message || 'Failed to get volume')
+    }
+  }
+
+  const handleClose = async () => {
+    const body = { ip: room.ip_address, volume }
+    const resVolume = await systemAPI.setVolume(body)
+    console.log('Setting volume:', resVolume)
+
+    if (resVolume.success) {
+      setModalVolumeOpen(false)
+      showNotif(`Volume set to ${volume}%`, 'success')
+    } else {
+      setModalErrorOpen(false)
+      showNotif(resVolume.error || resVolume.message || 'Failed to set volume', 'error')
+    }
+    setModalVolumeOpen(false)
+  }
+
+  useEffect(() => {
+    if (!room.start_time) {
+      setDuration('00:00:00')
+      return
+    }
+
+    const interval = setInterval(() => {
+      const start = new Date(room.start_time)
+      const now = new Date()
+      const diffMs = now - start // selisih dalam milidetik
+
+      if (diffMs < 0) {
+        setDuration('00:00:00')
+        return
+      }
+
+      const totalSeconds = Math.floor(diffMs / 1000)
+      const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0')
+      const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0')
+      const seconds = String(totalSeconds % 60).padStart(2, '0')
+
+      setDuration(`${hours}:${minutes}:${seconds}`)
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [room.start_time])
+
+  return (
+    <div
+      key={room.id}
+      className='flex flex-col md:flex-row md:items-center justify-between bg-[#1f1f1f] shadow-lg rounded-xl px-6 py-4'>
+      <div>
+        <div className='flex items-center gap-2'>
+          <span className='font-bold text-lg text-white'>{room.name}</span>
+          {room.status === 'Active' ? (
+            <>
+              <span className='text-green-400'>Active</span>
+              <span className='w-2 h-2 rounded-full bg-green-500'></span>
+            </>
+          ) : room.status === 'Inactive' ? (
+            <>
+              <span className='text-red-500'>Inactive</span>
+              <span className='w-2 h-2 rounded-full bg-red-500'></span>
+            </>
+          ) : (
+            <>
+              <span className='text-yellow-400'>Standby</span>
+              <span className='w-2 h-2 rounded-full bg-yellow-400'></span>
+            </>
+          )}
+        </div>
+        <div className='flex items-center gap-6 mt-1'>
+          <span className='text-gray-300 text-sm'>
+            Duration <span className='text-white ml-1'>{duration}</span>
+          </span>
+          <span className='text-gray-300 text-sm'>
+            Songs Queue <span className='text-white ml-1'>{room.Total || 0} Songs</span>
+          </span>
+        </div>
+      </div>
+      <div className='flex gap-2'>
+        <div className='flex gap-2 mt-4 md:mt-0'>
+          {room.status === 'Active' ? (
+            <button
+              className={`px-6 py-2 rounded-lg font-bold text-base text-white ${
+                isWaiting ? 'bg-red-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'
+              }`}
+              onClick={() => !isWaiting && handleStopSession(room.id)}
+              disabled={isWaiting}>
+              {isWaiting ? 'Please wait...' : 'Stop Session'}
+            </button>
+          ) : room.status === 'Inactive' ? (
+            <button className='bg-gray-600 text-white px-6 py-2 rounded-lg font-bold text-base' disabled>
+              Start Session
+            </button>
+          ) : (
+            <button
+              className={`px-6 py-2 rounded-lg font-bold text-base text-white ${
+                isWaiting ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
+              }`}
+              onClick={() => !isWaiting && handleStartSession(room.id)}
+              disabled={isWaiting}>
+              {isWaiting ? 'Please wait...' : 'Start Session'}
+            </button>
+          )}
+        </div>
+
+        <div>
+          {room.status !== 'Inactive' && (
+            <button
+              className='bg-red-600 hover:bg-red-700 text-white px-2 py-2 rounded-lg font-bold text-base'
+              onClick={handleShutdown}>
+              <Power />
+            </button>
+          )}
+        </div>
+        <div>
+          {room.status === 'Active' ? (
+            <div
+              className={`${loading ? 'bg-gray-700' : 'bg-[#0E9EEFEB] cursor-pointer'} transition-all rounded-lg p-2`}
+              onClick={handleVolume}>
+              <Volume2 className={`${loading ? 'text-gray-400' : 'text-white'} transition-all`} />
+            </div>
+          ) : (
+            <div className='bg-gray-700 rounded p-2'>
+              <Volume2 className='text-gray-400' />
+            </div>
+          )}
+        </div>
+      </div>
+      {modalErrorOpen && (
+        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
+          <div className='bg-[#181818] rounded-lg p-6 w-96'>
+            <div className='flex items-center gap-2'>
+              <X size={20} className='text-white' />
+              <span className='font-medium text-white'>Error</span>
+            </div>
+            <p className='text-white mt-2'>{errorMessage}</p>
+            <button
+              className='bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-bold text-base mt-4'
+              onClick={() => setModalErrorOpen(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      {modalVolumeOpen && (
+        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
+          <div className='bg-[#181818] rounded-lg p-6 w-96'>
+            <VolumeControl volume={volume} setVolume={setVolume} room={room} onClose={handleClose} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function VolumeControl({ volume, setVolume, onClose }) {
+  const handleChange = (e) => {
+    setVolume(Number(e.target.value))
+  }
+
+  return (
+    <div className='w-full'>
+      <label className='flex items-center gap-2 text-white mb-2'>
+        <Volume2 size={20} className='text-white' />
+        <span className='font-medium'>Master Volume</span>
+      </label>
+      <div className='flex items-center gap-3'>
+        <input
+          type='range'
+          min={0}
+          max={100}
+          value={volume}
+          onChange={handleChange}
+          className='w-full accent-[#b1c953] h-2'
+        />
+        <span className='text-[#b1c953] font-semibold text-sm'>{volume}%</span>
+      </div>
+      <button
+        className='mt-6 w-full py-2 rounded bg-gray-700 text-white font-semibold hover:bg-gray-600 transition'
+        onClick={onClose}>
+        Simpan
+      </button>
+    </div>
+  )
 }

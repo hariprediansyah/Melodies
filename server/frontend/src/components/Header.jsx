@@ -1,13 +1,39 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { GlassCard } from './Components'
+import { bannerAPI, roomAPI, songsAPI } from '../services/api'
 
 export default function Header({ title, desc, menu }) {
+  // Don't render the header for the dashboard page since it's integrated in the Dashboard component
+  if (menu === 'dashboard') {
+    return null
+  }
+
+  const [totalSong, setTotalSong] = useState(0)
+  const [totalBanner, setTotalBanner] = useState(0)
+  const [totalRoom, setTotalRoom] = useState(0)
+  const [totalRoomActive, setTotalRoomActive] = useState(0)
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    const songs = await songsAPI.totalSongs()
+    setTotalSong(songs.total)
+
+    const banners = await bannerAPI.total()
+    setTotalBanner(banners.total)
+
+    const rooms = await roomAPI.getTotal()
+    setTotalRoom(rooms.total)
+
+    const roomsActive = await roomAPI.getActiveTotal()
+    setTotalRoomActive(roomsActive.total)
+  }
+
   return (
-    // <div className='rounded-2xl bg-gradient-to-r from-[#1c141c] to-[#66537d] p-8 flex flex-col mb-6 shadow-md relative overflow-hidden'>
     <div
-      className={`rounded-2xl ${
-        menu == 'dashboard' ? 'bg-[url("./bg_dashboard.png")]' : 'bg-[url("./bg_nav.png")]'
-      } bg-cover bg-center p-8 flex flex-col mb-6 shadow-md relative overflow-hidden`}>
+      className={`rounded-2xl bg-[url("./bg_top.png")] bg-cover bg-center p-8 flex flex-col mb-6 shadow-md relative overflow-hidden`}>
       <div className='z-10'>
         <h1 className='text-3xl font-bold text-white flex items-center gap-3'>
           {menu === 'room' && (
@@ -64,28 +90,25 @@ export default function Header({ title, desc, menu }) {
         {/* Info summary */}
         {menu === 'room' && (
           <div className='flex gap-4 mt-6'>
-            <div className='bg-[#38333e] border-[#5c5564] rounded-lg px-6 py-2 text-white font-semibold text-lg'>
-              Total Room <span className='ml-2 font-bold'>20</span>
+            <div className='bg-white/10 backdrop-blur-sm border border-white/10 rounded-lg px-6 py-3 text-white font-medium'>
+              Total Room <span className='ml-2 font-bold'>{totalRoom}</span>
             </div>
-            <div className='bg-[#38333e] border-[#5c5564] rounded-lg px-6 py-2 text-white font-semibold text-lg'>
-              Room Active <span className='ml-2 font-bold'>12</span>
+            <div className='bg-white/10 backdrop-blur-sm border border-white/10 rounded-lg px-6 py-3 text-white font-medium'>
+              Room Active <span className='ml-2 font-bold'>{totalRoomActive}</span>
             </div>
           </div>
         )}
         {menu === 'songs' && (
           <div className='flex gap-4 mt-6'>
-            <div className='bg-[#38333e] rounded-lg px-6 py-2 text-white font-semibold text-lg'>
-              Library Songs <span className='ml-2 font-bold'>1,580</span>
-            </div>
-            <div className='bg-[#38333e] rounded-lg px-6 py-2 text-white font-semibold text-lg'>
-              Folder <span className='ml-2 font-bold'>25</span>
+            <div className='bg-white/10 backdrop-blur-sm border border-white/10 rounded-lg px-6 py-3 text-white font-medium'>
+              Library Songs <span className='ml-2 font-bold'>{totalSong}</span>
             </div>
           </div>
         )}
         {menu === 'banner' && (
           <div className='flex gap-4 mt-6'>
-            <div className='bg-[#38333e] rounded-lg px-6 py-2 text-white font-semibold text-lg'>
-              Total Banner <span className='ml-2 font-bold'>3</span>
+            <div className='bg-white/10 backdrop-blur-sm border border-white/10 rounded-lg px-6 py-3 text-white font-medium'>
+              Total Banner <span className='ml-2 font-bold'>{totalBanner}</span>
             </div>
           </div>
         )}

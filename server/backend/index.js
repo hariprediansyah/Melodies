@@ -11,6 +11,8 @@ const mime = require('mime-types')
 const ffprobe = require('ffprobe')
 const ffprobeStatic = require('ffprobe-static')
 const macScanner = require('./macScanner')
+const license = require('./license')
+const axios = require('axios')
 
 // Jalankan scan MAC address otomatis setiap 30 detik
 setInterval(() => {
@@ -24,7 +26,7 @@ setInterval(() => {
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB limit
+    fileSize: 1024 * 1024 * 1024 // 1GB limit
   }
 })
 
@@ -55,6 +57,54 @@ async function deteksiFormat(filePath) {
   }
 }
 
+// // Cek lisensi saat startup
+// if (!license.isLicensed()) {
+//   console.error('Aplikasi belum diaktivasi. Silakan aktivasi dengan license key.')
+//   process.exit(1)
+// }
+
+// Endpoint aktivasi lisensi (opsional, untuk testing manual)
+app.post('/activate-license', async (req, res) => {
+  const { licenseKey } = req.body
+  console.log('Activating license with key:', licenseKey)
+
+  if (!licenseKey) return res.json({ success: false, message: 'License key required' })
+  const result = await license.activateLicense(licenseKey)
+  console.log('License activation result:', result)
+  if (result.success) {
+    res.json({ success: true })
+    // setTimeout(() => process.exit(0), 1000) // restart agar lisensi aktif
+  } else {
+    if (result.message.includes('Request failed with status code 400')) {
+      console.error('Invalid license key:', result.message)
+      res.json({ success: false, message: 'Invalid license key' })
+    } else {
+      res.json({ success: false, message: result.message || 'Activation failed' })
+    }
+  }
+})
+
+// Endpoint cek status lisensi
+app.get('/license-status', (req, res) => {
+  try {
+    const fs = require('fs')
+    const path = require('path')
+    const LICENSE_FILE = path.join(__dirname, 'licensed.json')
+    if (!fs.existsSync(LICENSE_FILE)) {
+      return res.json({ licensed: false })
+    }
+    const data = JSON.parse(fs.readFileSync(LICENSE_FILE, 'utf-8'))
+    const { machineIdSync } = require('node-machine-id')
+    const currentId = machineIdSync()
+    if (data.status === 'licensed' && data.hardwareId === currentId) {
+      return res.json({ licensed: true })
+    }
+    return res.json({ licensed: false })
+  } catch {
+    return res.json({ licensed: false })
+  }
+})
+
 // --- ROOM MANAGEMENT ---
 app.get('/rooms', async (req, res) => {
   const [rows] = await pool.query(
@@ -63,10 +113,50 @@ app.get('/rooms', async (req, res) => {
   res.json(rows)
 })
 
+app.get('/rooms/force-shutdown/:id', async (req, res) => {
+  const [row] = await pool.query('SELECT force_shutdown FROM rooms WHERE id = ?', [req.params.id])
+  await pool.query('UPDATE rooms SET force_shutdown = NULL WHERE id = ?', [req.params.id])
+  res.json(row.force_shutdown === 'Y')
+})
+
+app.get('/rooms/total', async (req, res) => {
+  const [rows] = await pool.query('SELECT COUNT(*) as total FROM rooms')
+  res.json(rows[0])
+})
+
+app.get('/rooms/total-active', async (req, res) => {
+  const [rows] = await pool.query('SELECT COUNT(*) as total FROM rooms WHERE status = "Active"')
+  res.json(rows[0])
+})
+
+app.get('/roomsdashboard', async (req, res) => {
+  const [rows] = await pool.query(
+    `SELECT A.id, A.name, A.status, C.Total, B.start_time, A.ip_address FROM rooms A
+    left join room_sessions B ON A.id = B.room_id AND B.status = 'Active'
+    left join (SELECT COUNT(*) as Total, room_id from song_playlist GROUP by room_id) C ON A.id = C.room_id
+    ORDER BY A.id ASC`
+  )
+  res.json(rows)
+})
+
 // Endpoint shutdown all room
 app.post('/rooms/shutdown-all', async (req, res) => {
   try {
-    const [result] = await pool.query('UPDATE rooms SET status = "Inactive"')
+    const [result] = await pool.query('UPDATE rooms SET status = "Inactive", force_shutdown = "Y"')
+    await pool.query('UPDATE room_sessions SET status = "Ended" where status = "Active"')
+    res.json({ success: true, affectedRows: result.affectedRows })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/rooms/shutdown-room/:id', async (req, res) => {
+  const roomId = req.params.id
+  try {
+    const [result] = await pool.query('UPDATE rooms SET status = "Inactive", force_shutdown = "Y" WHERE id = ?', [
+      roomId
+    ])
+    await pool.query('UPDATE room_sessions SET status = "Ended" WHERE room_id = ? AND status = "Active"', [roomId])
     res.json({ success: true, affectedRows: result.affectedRows })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
@@ -109,7 +199,7 @@ app.get('/rooms/by-mac/:mac', async (req, res) => {
 app.put('/rooms/by-mac/:mac', async (req, res) => {
   const mac = req.params.mac
   const { status } = req.body
-  await pool.query('UPDATE rooms SET status=? WHERE mac_address=?', [status, mac])
+  await pool.query('UPDATE rooms SET status=? WHERE mac_address=? AND status="Inactive"', [status, mac])
   res.json({ success: true })
 })
 
@@ -127,6 +217,8 @@ app.post('/rooms/:id/start-session', async (req, res) => {
     await pool.query('INSERT INTO room_sessions (room_id, start_time, status) VALUES (?, NOW(), "Active")', [roomId])
     // (Opsional) Update status room ke Active
     await pool.query('UPDATE rooms SET status="Active" WHERE id=?', [roomId])
+    // hapus playlist sebelumnya
+    await pool.query('DELETE FROM song_playlist WHERE room_id=?', [roomId])
     res.json({ success: true })
   } catch (err) {
     res.status(500).json({ error: 'Failed to start session' })
@@ -156,6 +248,10 @@ app.post('/rooms/:id/end-session', async (req, res) => {
 app.get('/songs', async (req, res) => {
   const [rows] = await pool.query('SELECT * FROM songs ORDER BY id ASC')
   res.json(rows)
+})
+app.get('/songs/total', async (req, res) => {
+  const [rows] = await pool.query('SELECT COUNT(*) as total FROM songs')
+  res.json(rows[0])
 })
 app.post(
   '/songs',
@@ -199,11 +295,30 @@ app.post(
           fs.unlinkSync(tempPath)
           fs.unlinkSync(outPath)
 
-          songFileName = 'song_' + Date.now() + '.mp4'
+          songFileName = 'song.mp4'
+        } else if (ext === '.mpg') {
+          const tempPath = path.join(storagePath, 'temp_' + Date.now() + '.mpg')
+          fs.writeFileSync(tempPath, buffer)
+
+          try {
+            const outPath = tempPath.replace('.mpg', '.mp4')
+            // Konversi .mpg ke .mp4
+            execSync(`ffmpeg -y -i "${tempPath}" -c:v libx264 -c:a aac -strict experimental "${outPath}"`)
+
+            buffer = fs.readFileSync(outPath)
+            fs.unlinkSync(tempPath)
+            fs.unlinkSync(outPath)
+
+            format = 'mp4'
+            songFileName = 'song.mp4'
+          } catch (e) {
+            fs.unlinkSync(tempPath)
+            throw e
+          }
         } else {
           // Format selain .dat
           format = ext.replace('.', '')
-          songFileName = 'song_' + Date.now() + ext
+          songFileName = 'song' + ext
         }
 
         // Simpan metadata lagu
@@ -252,6 +367,27 @@ app.post(
     }
   }
 )
+
+app.get('/songs/download/:id', async (req, res) => {
+  const songId = req.params.id
+  const [rows] = await pool.query('SELECT * FROM songs WHERE id=?', [songId])
+  if (rows.length === 0) {
+    return res.status(404).json({ error: 'Song not found' })
+  }
+  const song = rows[0]
+  const songFilePath = song.video_path
+
+  if (!fs.existsSync(songFilePath)) {
+    return res.status(404).json({ error: 'Song file not found' })
+  }
+
+  res.download(songFilePath, `song.${song.format}`, (err) => {
+    if (err) {
+      console.error('Download error:', err)
+      res.status(500).send('Failed to download song')
+    }
+  })
+})
 app.put(
   '/songs/:id',
   upload.fields([
@@ -297,10 +433,29 @@ app.put(
           fs.unlinkSync(tempPath)
           fs.unlinkSync(outPath)
 
-          songFileName = 'song_' + Date.now() + '.mp4'
+          songFileName = 'song.mp4'
+        } else if (ext === '.mpg') {
+          const tempPath = path.join(storagePath, 'temp_' + Date.now() + '.mpg')
+          fs.writeFileSync(tempPath, buffer)
+
+          try {
+            const outPath = tempPath.replace('.mpg', '.mp4')
+            // Konversi .mpg ke .mp4
+            execSync(`ffmpeg -y -i "${tempPath}" -c:v libx264 -c:a aac -strict experimental "${outPath}"`)
+
+            buffer = fs.readFileSync(outPath)
+            fs.unlinkSync(tempPath)
+            fs.unlinkSync(outPath)
+
+            format = 'mp4'
+            songFileName = 'song.mp4'
+          } catch (e) {
+            fs.unlinkSync(tempPath)
+            throw e
+          }
         } else {
           format = ext.replace('.', '')
-          songFileName = 'song_' + Date.now() + ext
+          songFileName = 'song' + ext
         }
 
         const songFilePath = path.join(songDir, songFileName)
@@ -359,7 +514,30 @@ app.get('/banners', async (req, res) => {
   const [rows] = await pool.query(
     'SELECT id, title, description, created_at, updated_at, banner_updated_at FROM banners ORDER BY id ASC'
   )
-  res.json(rows)
+  const banners = rows.map((row) => {
+    let extension = null
+    const bannerPath = path.join(storagePath, 'banners', row.id.toString())
+    if (fs.existsSync(bannerPath + '.mp4')) {
+      extension = 'mp4'
+    } else if (fs.existsSync(bannerPath + '.jpg')) {
+      extension = 'jpg'
+    }
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      banner_updated_at: row.banner_updated_at,
+      extension
+    }
+  })
+  res.json(banners)
+})
+
+app.get('/banners/total', async (req, res) => {
+  const [rows] = await pool.query('SELECT COUNT(*) as total FROM banners')
+  res.json(rows[0])
 })
 app.post('/banners', upload.single('image'), async (req, res) => {
   const { title, description } = req.body
@@ -372,8 +550,14 @@ app.post('/banners', upload.single('image'), async (req, res) => {
     if (!fs.existsSync(carouselDir)) {
       fs.mkdirSync(carouselDir, { recursive: true })
     }
-    imagePath = `/storage/banners/${bannerId}.jpg`
-    fs.writeFileSync(path.join(carouselDir, `${bannerId}.jpg`), req.file.buffer)
+    let ext = path.extname(req.file.originalname).toLowerCase()
+    if (ext === '.mp4') {
+      imagePath = `/storage/banners/${bannerId}.mp4`
+    } else {
+      imagePath = `/storage/banners/${bannerId}.jpg`
+      ext = '.jpg' // simpan selain mp4 sebagai jpg
+    }
+    fs.writeFileSync(path.join(carouselDir, `${bannerId}${ext}`), req.file.buffer)
     await pool.query('UPDATE banners SET banner_updated_at=NOW() WHERE id=?', [bannerId])
   }
   res.json({ success: true, id: bannerId, image: imagePath })
@@ -389,8 +573,23 @@ app.put('/banners/:id', upload.single('image'), async (req, res) => {
     if (!fs.existsSync(carouselDir)) {
       fs.mkdirSync(carouselDir, { recursive: true })
     }
-    imagePath = `/storage/banners/${bannerId}.jpg`
-    fs.writeFileSync(path.join(carouselDir, `${bannerId}.jpg`), req.file.buffer)
+    let ext = path.extname(req.file.originalname).toLowerCase()
+    if (ext === '.mp4') {
+      imagePath = `/storage/banners/${bannerId}.mp4`
+    } else {
+      imagePath = `/storage/banners/${bannerId}.jpg`
+      ext = '.jpg' // simpan selain mp4 sebagai jpg
+    }
+
+    //hapus file lama jika ada
+    const exts = ['.jpg', '.jpeg', '.png', '.webp', '.mp4']
+    for (const ext of exts) {
+      const filePath = path.join(carouselDir, `${bannerId}${ext}`)
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath)
+      }
+    }
+    fs.writeFileSync(path.join(carouselDir, `${bannerId}${ext}`), req.file.buffer)
     sql += ', banner_updated_at=NOW()'
   }
   sql += ' WHERE id=?'
@@ -398,12 +597,13 @@ app.put('/banners/:id', upload.single('image'), async (req, res) => {
   await pool.query(sql, params)
   res.json({ success: true, id: bannerId, image: imagePath })
 })
+
 app.delete('/banners/:id', async (req, res) => {
   const bannerId = req.params.id
   await pool.query('DELETE FROM banners WHERE id=?', [bannerId])
   // Hapus file gambar jika ada
   const carouselDir = path.join(storagePath, 'banners')
-  const exts = ['.jpg', '.jpeg', '.png', '.webp']
+  const exts = ['.jpg', '.jpeg', '.png', '.webp', '.mp4']
   for (const ext of exts) {
     const filePath = path.join(carouselDir, `${bannerId}${ext}`)
     if (fs.existsSync(filePath)) {
@@ -470,6 +670,205 @@ app.get('/files/banner/:filename', (req, res) => {
   }
 })
 
+// --- PLAYLIST MANAGEMENT ---
+app.get('/playlist', async (req, res) => {
+  const roomId = req.query.room_id
+  if (!roomId) return res.status(400).json({ success: false, error: 'room_id required' })
+  try {
+    const [playlist] = await pool.query(
+      'SELECT a.room_id, a.id, a.title, a.artist, a.video_url, a.is_youtube, b.vocal FROM song_playlist a left join songs b on a.id = b.id WHERE a.room_id=? ORDER BY CAST(a.id AS UNSIGNED) ASC',
+      [roomId]
+    )
+
+    res.json(playlist)
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/playlist', async (req, res) => {
+  const { room_id, id: songId, title, artist, video_url, is_youtube } = req.body
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+
+    // id = auto increment per room (posisi), bukan id lagu
+    const [[row]] = await conn.query(
+      `SELECT COALESCE(MAX(CAST(id AS SIGNED)), 0) + 1 AS next_id FROM song_playlist WHERE room_id=?`,
+      [room_id]
+    )
+    const newId = String(row.next_id)
+
+    // video_url = id lagu asli kalau bukan youtube
+    const finalVideoUrl = is_youtube ? `https://www.youtube.com/embed/${songId}` : String(songId)
+
+    await conn.query(
+      `INSERT INTO song_playlist (room_id, id, title, artist, video_url, is_youtube)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [room_id, newId, title, artist, finalVideoUrl, is_youtube]
+    )
+
+    if (is_youtube) {
+      await conn.query(
+        `INSERT INTO song_youtube_history (room_id, id, title, artist, video_url, is_youtube, play_count)
+         VALUES (?, ?, ?, ?, ?, ?, 1)
+         ON DUPLICATE KEY UPDATE play_count = play_count + 1`,
+        [room_id, songId, title, artist, video_url, is_youtube]
+      )
+    }
+
+    await conn.commit()
+    res.json({ success: true })
+  } catch (err) {
+    await conn.rollback()
+    res.status(500).json({ success: false, error: err.message })
+  } finally {
+    conn.release()
+  }
+})
+
+app.delete('/playlist/:id', async (req, res) => {
+  const songId = req.params.id
+  const roomId = req.query.room_id
+  try {
+    if (!roomId) return res.status(400).json({ success: false, error: 'room_id required' })
+    await pool.query('DELETE FROM song_playlist WHERE id=? AND room_id=?', [songId, roomId])
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.delete('/playlist', async (req, res) => {
+  const roomId = req.query.room_id
+  try {
+    if (!roomId) return res.status(400).json({ success: false, error: 'room_id required' })
+    await pool.query('DELETE FROM song_playlist WHERE room_id=?', [roomId])
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/playlist/swap', async (req, res) => {
+  const { room_id, song_id_1, song_id_2 } = req.body
+  const conn = await pool.getConnection()
+  try {
+    if (!room_id || !song_id_1 || !song_id_2) {
+      return res.status(400).json({ success: false, error: 'room_id, song_id_1, and song_id_2 are required' })
+    }
+
+    await conn.beginTransaction()
+
+    const [songs] = await conn.query(`SELECT * FROM song_playlist WHERE room_id=? AND id IN (?, ?) FOR UPDATE`, [
+      room_id,
+      song_id_1,
+      song_id_2
+    ])
+
+    if (songs.length !== 2) {
+      await conn.rollback()
+      return res.status(404).json({ success: false, error: 'One or both songs not found in playlist' })
+    }
+
+    const s1 = songs.find((s) => String(s.id) === String(song_id_1))
+    const s2 = songs.find((s) => String(s.id) === String(song_id_2))
+
+    const contentFields = ['title', 'artist', 'video_url', 'is_youtube', 'vocal']
+
+    // s1 dapat content s2
+    const setClause1 = contentFields.map((f) => `${f}=?`).join(', ')
+    await conn.query(`UPDATE song_playlist SET ${setClause1} WHERE room_id=? AND id=?`, [
+      ...contentFields.map((f) => s2[f]),
+      room_id,
+      song_id_1
+    ])
+
+    // s2 dapat content s1
+    const setClause2 = contentFields.map((f) => `${f}=?`).join(', ')
+    await conn.query(`UPDATE song_playlist SET ${setClause2} WHERE room_id=? AND id=?`, [
+      ...contentFields.map((f) => s1[f]),
+      room_id,
+      song_id_2
+    ])
+
+    await conn.commit()
+    res.json({ success: true })
+  } catch (err) {
+    try {
+      await conn.rollback()
+    } catch {}
+    console.error(err)
+    res.status(500).json({ success: false, error: err.message })
+  } finally {
+    conn.release()
+  }
+})
+
+app.post('/playlist/move-to-top', async (req, res) => {
+  const { room_id, song_id } = req.body
+  const conn = await pool.getConnection()
+  try {
+    if (!room_id || !song_id) return res.status(400).json({ success: false, error: 'room_id and song_id are required' })
+
+    await conn.beginTransaction()
+
+    const [allRows] = await conn.query(
+      `SELECT * FROM song_playlist WHERE room_id=? ORDER BY CAST(id AS SIGNED) ASC FOR UPDATE`,
+      [room_id]
+    )
+
+    if (allRows.length === 0) {
+      await conn.rollback()
+      return res.status(404).json({ success: false, error: 'Playlist is empty' })
+    }
+
+    const curIdx = allRows.findIndex((r) => String(r.id) === String(song_id))
+
+    if (curIdx === -1) {
+      await conn.rollback()
+      return res.status(404).json({ success: false, error: 'Song not found in this room' })
+    }
+
+    if (curIdx <= 1) {
+      await conn.commit()
+      return res.json({ success: true, moved: false })
+    }
+
+    // Swap content, id tetap di tempat
+    const contentFields = ['title', 'artist', 'video_url', 'is_youtube']
+    const seg = allRows.slice(1, curIdx + 1)
+    const curContent = seg[seg.length - 1]
+
+    // Geser content ke bawah: seg[i] dapat content seg[i-1]
+    for (let i = seg.length - 1; i > 0; i--) {
+      const setClause = contentFields.map((f) => `${f}=?`).join(', ')
+      const values = contentFields.map((f) => seg[i - 1][f])
+      await conn.query(`UPDATE song_playlist SET ${setClause} WHERE room_id=? AND id=?`, [
+        ...values,
+        room_id,
+        seg[i].id
+      ])
+    }
+
+    // seg[0] dapat content curRow
+    const setClause = contentFields.map((f) => `${f}=?`).join(', ')
+    const values = contentFields.map((f) => curContent[f])
+    await conn.query(`UPDATE song_playlist SET ${setClause} WHERE room_id=? AND id=?`, [...values, room_id, seg[0].id])
+
+    await conn.commit()
+    res.json({ success: true, moved: true, newTopId: String(seg[0].id) })
+  } catch (err) {
+    try {
+      await conn.rollback()
+    } catch {}
+    console.error(err)
+    res.status(500).json({ success: false, error: err.message })
+  } finally {
+    conn.release()
+  }
+})
+
 // Endpoint untuk trigger scan MAC address dan update IP
 app.post('/scan-mac', async (req, res) => {
   try {
@@ -477,6 +876,210 @@ app.post('/scan-mac', async (req, res) => {
     res.json({ success: true, log })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+// --- MAC ADDRESS MANAGEMENT ---
+app.get('/mac-addresses', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT mac_address FROM master_mac ORDER BY mac_address ASC')
+    res.json(rows.map((row) => row.mac_address))
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+// --- CALL LOG MANAGEMENT ---
+app.get('/call-logs', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT cl.id, cl.room_id, r.name as room_name, cl.status, cl.created_at
+      FROM call_log cl
+      JOIN rooms r ON cl.room_id = r.id
+      ORDER BY cl.created_at DESC
+      LIMIT 20
+    `)
+    res.json(rows)
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.get('/call-logs/active', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT cl.id, cl.room_id, r.name as room_name, cl.status, cl.created_at
+      FROM call_log cl
+      JOIN rooms r ON cl.room_id = r.id
+      WHERE cl.status = 'Calling'
+      ORDER BY cl.created_at DESC
+    `)
+    res.json(rows)
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.get('/call-logs/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const [rows] = await pool.query(
+      `
+      SELECT cl.id, cl.room_id, r.name as room_name, cl.status, cl.created_at
+      FROM call_log cl
+      JOIN rooms r ON cl.room_id = r.id
+      WHERE cl.id = ?
+    `,
+      [id]
+    )
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Call log not found' })
+    }
+
+    res.json(rows[0])
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/call-logs', async (req, res) => {
+  try {
+    const { room_id } = req.body
+    if (!room_id) {
+      return res.status(400).json({ success: false, error: 'Room ID is required' })
+    }
+
+    // Check if room exists
+    const [roomCheck] = await pool.query('SELECT id FROM rooms WHERE id = ?', [room_id])
+    if (roomCheck.length === 0) {
+      return res.status(404).json({ success: false, error: 'Room not found' })
+    }
+
+    // Create new call log
+    const [result] = await pool.query('INSERT INTO call_log (room_id, status) VALUES (?, "Calling")', [room_id])
+
+    res.json({
+      success: true,
+      call_id: result.insertId
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.put('/call-logs/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { status } = req.body
+
+    if (!status || !['Accepted', 'Rejected'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'Valid status (Accepted/Rejected) is required' })
+    }
+
+    // Update call log status
+    const [result] = await pool.query('UPDATE call_log SET status = ? WHERE id = ? AND status = "Calling"', [
+      status,
+      id
+    ])
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, error: 'Call log not found or already processed' })
+    }
+
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/validate-admin', async (req, res) => {
+  try {
+    const { password } = req.body
+
+    if (!password) {
+      return res.status(400).json({ success: false, error: 'Password is required' })
+    }
+
+    const [sysParam] = await pool.query('SELECT param_value FROM sys_params WHERE param_key = "login_password"')
+    console.log('sysParam:', sysParam)
+
+    if (sysParam.length === 0 || sysParam[0].param_value !== password) {
+      return res.status(401).json({ success: false, error: 'Invalid password' })
+    }
+
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body
+
+    if (!username || !password) {
+      return res.json({ success: false, error: 'Username and password are required' })
+    }
+
+    const [sysParam] = await pool.query('SELECT param_value FROM sys_params WHERE param_key = "login_userid"')
+    if (sysParam.length === 0 || sysParam[0].param_value !== username) {
+      return res.json({ success: false, error: 'Invalid username or password' })
+    }
+
+    const [sysParamPassword] = await pool.query('SELECT param_value FROM sys_params WHERE param_key = "login_password"')
+    if (sysParamPassword.length === 0 || sysParamPassword[0].param_value !== password) {
+      return res.json({ success: false, error: 'Invalid password or username' })
+    }
+
+    res.json({ success: true })
+  } catch (err) {
+    res.json({ success: false, error: err.message })
+  }
+})
+
+app.get('/youtube-history', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, title, artist, video_url, play_count
+       FROM song_youtube_history
+       ORDER BY play_count DESC
+       LIMIT 20`
+    )
+    res.json({ success: true, data: rows })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/systemvolume', async (req, res) => {
+  const { volume, ip } = req.body
+  const apiUrl = `http://${ip}:5771/systemvolume`
+  try {
+    const body = { volume }
+    const resPost = await axios.post(apiUrl, body)
+    if (resPost.status !== 200) {
+      return { success: false, error: 'Failed to set system volume' }
+    }
+    return res.json({ success: true, message: 'System volume set successfully' })
+  } catch (err) {
+    console.error('License activation error:', err.message)
+    return { success: false, message: err.message }
+  }
+})
+
+app.get('/systemvolume', async (req, res) => {
+  const { ip } = req.query
+  const apiUrl = `http://${ip}:5771/systemvolume`
+  try {
+    const response = await axios.get(apiUrl)
+    if (response.status !== 200) {
+      return res.json({ success: false, error: 'Failed to get system volume' })
+    }
+    return res.json({ success: true, data: response.data })
+  } catch (err) {
+    console.error('Error getting system volume:', err.message)
+    return res.json({ success: false, error: err.message })
   }
 })
 

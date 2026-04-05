@@ -1,0 +1,65 @@
+const fs = require('fs')
+const path = require('path')
+const { machineIdSync } = require('node-machine-id')
+const axios = require('axios')
+
+function getHardwareId() {
+  return machineIdSync()
+}
+
+function isLicensed(baseDir) {
+  const LICENSE_FILE = path.join(baseDir, 'licensed.json')
+  if (!fs.existsSync(LICENSE_FILE)) return false
+  try {
+    const data = JSON.parse(fs.readFileSync(LICENSE_FILE, 'utf-8'))
+    const currentId = getHardwareId()
+    console.log(currentId, data.hardwareId)
+    console.log(data.status)
+    return data.status === 'licensed' && data.hardwareId === currentId
+  } catch {
+    return false
+  }
+}
+
+async function activateLicense(baseDir, licenseKey) {
+  const LICENSE_FILE = path.join(baseDir, 'licensed.json')
+  const hardwareId = getHardwareId()
+  // Ganti URL di bawah dengan API kamu
+  const apiUrl = 'https://master.skylerasolutions.com/activate-license'
+  try {
+    const body = { licenseKey, hardwareId }
+    console.log('Activating license with body:', body)
+    const res = await axios.post(apiUrl, body)
+    console.log('License activation response:', res.data)
+    if (res.data && res.data.success) {
+      fs.writeFileSync(
+        LICENSE_FILE,
+        JSON.stringify(
+          {
+            status: 'licensed',
+            hardwareId,
+            activatedAt: new Date().toISOString(),
+            licenseKey
+          },
+          null,
+          2
+        )
+      )
+      return { success: true }
+    }
+    console.error('License activation failed:', res.data)
+    return { success: false, message: res.data && res.data.message }
+  } catch (err) {
+    if (err.message.includes('Request failed with status code 400')) {
+      return { success: false, message: 'Invalid license key' }
+    }
+    console.error('License activation error:', err.message)
+    return { success: false, message: err.message }
+  }
+}
+
+module.exports = {
+  isLicensed,
+  activateLicense,
+  getHardwareId
+}

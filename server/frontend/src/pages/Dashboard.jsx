@@ -1,71 +1,140 @@
 import React, { useState, useEffect } from 'react'
-import { roomAPI } from '../services/api'
-import { ToastNotif, useNotifStack } from '../components/Components'
+import { roomAPI, callLogAPI, songsAPI } from '../services/api'
+import { CardRoom, ToastNotif, useNotifStack } from '../components/Components'
 
 const API_URL = 'http://localhost:4000'
 
-const statusColor = {
-  Active: 'text-green-400',
-  Standby: 'text-yellow-400',
-  Inactive: 'text-red-400'
-}
-
-const statusBg = {
-  Active: 'bg-green-900/40',
-  Standby: 'bg-yellow-900/40',
-  Inactive: 'bg-gray-800/60'
-}
-
-export default function Dashboard() {
+export default function Dashboard({ onDetail }) {
   const [rooms, setRooms] = useState([])
+  const [activeCalls, setActiveCalls] = useState([])
+  const [recentCalls, setRecentCalls] = useState([])
   const [loading, setLoading] = useState(true)
   const { notifs, showNotif, onClose } = useNotifStack()
+  const [currentDate, setCurrentDate] = useState('')
+  const [currentTime, setCurrentTime] = useState('')
+  const [totalSong, setTotalSong] = useState(0)
+  const [search, setSearch] = useState('')
+  const [confirmAction, setConfirmAction] = useState(null)
+  const [confirmShutdown, setConfirmShutdown] = useState(false)
+  const [room, setRoom] = useState(null)
+  const [isWaiting, setIsWaiting] = useState(false)
 
   useEffect(() => {
     fetchRooms()
+    fetchCalls()
+    fetchSongs()
+
+    const updateDate = () => {
+      const today = new Date()
+      const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
+      // Using a specific locale for consistency, e.g., 'en-GB'
+      setCurrentDate(today.toLocaleDateString('en-GB', options))
+
+      const timeOptions = { hour: 'numeric', minute: 'numeric' }
+      // Using a specific locale for consistency, e.g., 'en-GB'
+      setCurrentTime(today.toLocaleTimeString('en-GB', timeOptions))
+    }
+
+    updateDate()
+
+    // Set up intervals for periodic updates
+    const dateTimer = setInterval(updateDate, 60000) // Update date/time every minute
+    const callsTimer = setInterval(fetchCalls, 5000) // Check for new calls every 5 seconds
+    const roomsTimer = setInterval(fetchRooms, 30000) // Update rooms every 30 seconds
+
+    return () => {
+      clearInterval(dateTimer)
+      clearInterval(callsTimer)
+      clearInterval(roomsTimer)
+    }
   }, [])
 
   const fetchRooms = async () => {
     try {
-      const res = await fetch(`${API_URL}/rooms`)
+      const res = await fetch(`${API_URL}/roomsdashboard`)
       const data = await res.json()
       setRooms(data)
     } catch (e) {
+      console.error('Error fetching rooms:', e)
       setRooms([])
     } finally {
       setLoading(false)
     }
   }
 
-  const activeRooms = rooms.filter((r) => r.status === 'Active')
-  const standbyRooms = rooms.filter((r) => r.status === 'Standby')
-  const inactiveRooms = rooms.filter((r) => r.status === 'Inactive')
+  const fetchCalls = async () => {
+    try {
+      // Get active calls (status = 'Calling')
+      const activeCallsData = await callLogAPI.getActive()
 
-  // Dummy data untuk queue dan durasi
-  const getDummyDuration = (status) => (status === 'Active' ? '00:45:20' : '00:00:00')
-  const getDummyQueue = (status) => (status === 'Active' ? 3 : 0)
+      setActiveCalls(activeCallsData)
 
-  // Handler untuk start/end session
+      // Get all recent calls
+      const allCallsData = await callLogAPI.getAll()
+      // Filter out active calls and keep only the most recent ones
+      const recentCompletedCalls = allCallsData.filter((call) => call.status !== 'Calling').slice(0, 5) // Keep only the 5 most recent completed calls
+
+      setRecentCalls(recentCompletedCalls)
+    } catch (e) {
+      console.error('Error fetching calls:', e)
+    }
+  }
+
+  const fetchSongs = async () => {
+    try {
+      const res = await songsAPI.totalSongs()
+      setTotalSong(res.total)
+    } catch (e) {
+      console.error('Error fetching songs:', e)
+    }
+  }
+
   const handleStartSession = async (roomId) => {
+    setIsWaiting(true)
     try {
       await roomAPI.startSession(roomId)
       fetchRooms()
       showNotif('Sesi berhasil dimulai!', 'success')
     } catch (e) {
       showNotif('Gagal memulai sesi!', 'error')
+    } finally {
+      setTimeout(() => setIsWaiting(false), 2000)
     }
   }
+
   const handleEndSession = async (roomId) => {
+    setIsWaiting(true)
     try {
       await roomAPI.endSession(roomId)
       fetchRooms()
       showNotif('Sesi berhasil diakhiri!', 'success')
     } catch (e) {
       showNotif('Gagal mengakhiri sesi!', 'error')
+    } finally {
+      setTimeout(() => setIsWaiting(false), 2000)
     }
   }
 
-  // Handler untuk shutdown all room
+  const handleAcceptCall = async (callId) => {
+    try {
+      await callLogAPI.acceptCall(callId)
+      fetchCalls() // Refresh calls after accepting
+      showNotif('Call accepted successfully', 'success')
+    } catch (e) {
+      showNotif('Failed to accept call', 'error')
+    }
+  }
+
+  const handleRejectCall = async (callId) => {
+    try {
+      await callLogAPI.rejectCall(callId)
+      fetchCalls() // Refresh calls after rejecting
+      showNotif('Call rejected', 'success')
+    } catch (e) {
+      showNotif('Failed to reject call', 'error')
+    }
+  }
+
   const handleShutdownAll = async () => {
     try {
       await roomAPI.shutdownAll()
@@ -76,185 +145,247 @@ export default function Dashboard() {
     }
   }
 
+  const handleShutdown = async () => {
+    setLoading(true)
+    console.log('Shutting down room:', room.id)
+
+    const resShutdown = await roomAPI.shutdown(room.id)
+    setLoading(false)
+    if (resShutdown.success) {
+      showNotif('Room shutdown successfully', 'success')
+      fetchRooms() // Refresh rooms after shutdown
+      setConfirmShutdown(null) // Close confirmation dialog
+    } else {
+      setModalErrorOpen(true)
+      setErrorMessage(resShutdown.error || resShutdown.message || 'Failed to shutdown room')
+    }
+  }
+
+  // Format timestamp to readable time
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp)
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  }
+
   if (loading) {
     return <div className='text-center py-8'>Loading...</div>
   }
 
+  const filteredRooms = rooms.filter((room) => room.name.toLowerCase().includes(search.toLowerCase()))
+  const activeRooms = filteredRooms.filter((r) => r.status === 'Active')
+  const activeRoomsAll = rooms.filter((r) => r.status === 'Active')
+
   return (
-    <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
+    <div>
       <ToastNotif notifs={notifs} onClose={onClose} />
-      {/* Kiri: Main Dashboard */}
-      <div className='lg:col-span-2 flex flex-col gap-6'>
-        {/* List Room */}
-        <div className='bg-transparent p-0'>
+
+      {/* Hero Banner */}
+      <div className='rounded-2xl bg-[url("./bg_dashboard.png")] bg-cover bg-center p-8 mb-6'>
+        <h1 className='text-4xl font-bold text-white'>Unleash Your Inner Star!</h1>
+        <p className='text-2xl text-white/90 mt-2'>The Ultimate Karaoke Experience!</p>
+
+        {/* Status Cards */}
+        <div className='flex gap-4 mt-6'>
+          <div className='bg-black/20 backdrop-blur-sm border border-white/10 rounded-lg px-6 py-3 text-white font-medium flex items-center gap-2'>
+            Status Online <div className='w-2 h-2 bg-green-500 rounded-full ml-1'></div>
+          </div>
+          <div className='bg-black/20 backdrop-blur-sm border border-white/10 rounded-lg px-6 py-3 text-white font-medium'>
+            Room Active <span className='ml-2'>{activeRoomsAll.length || 0}</span>
+          </div>
+          <div className='bg-black/20 backdrop-blur-sm border border-white/10 rounded-lg px-6 py-3 text-white font-medium'>
+            Library Songs <span className='ml-2'>{totalSong || 0}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
+        {/* Left: Main Dashboard */}
+        <div className='lg:col-span-2'>
           <div className='flex items-center justify-between mb-4'>
             <div className='text-xl font-bold text-white'>
-              Dashboard <span className='text-green-400 ml-2'>{activeRooms.length} Room Active</span>
+              Dashboard <span className='text-green-400 ml-2'>{activeRooms.length || 0} Room Active</span>
             </div>
-            <input
-              type='text'
-              placeholder='Filters Room'
-              className='px-4 py-2 rounded bg-gray-700 text-white outline-none'
-            />
-          </div>
-          <div className='flex flex-col gap-5'>
-            {rooms.map((room) => (
-              <div
-                key={room.id}
-                className={`flex flex-col md:flex-row md:items-center justify-between bg-[#191c22] shadow-lg rounded-xl px-6 py-4 border border-[#23262e]`}>
-                <div className='flex flex-col gap-1 w-full md:w-auto'>
-                  <div className='flex items-center gap-2'>
-                    <span className='text-2xl text-yellow-400'>
-                      <svg width='22' height='22' fill='none' viewBox='0 0 24 24'>
-                        <circle cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='2' />
-                        <path d='M12 8v4l3 2' stroke='currentColor' strokeWidth='2' strokeLinecap='round' />
-                      </svg>
-                    </span>
-                    <span className='font-bold text-lg text-white'>{room.name}</span>
-                    <span className='ml-2 text-sm text-white/80'>{room.status}</span>
-                    <span className={`ml-1 w-2 h-2 rounded-full ${statusColor[room.status]}`}></span>
-                  </div>
-                  <div className='flex items-center gap-6 mt-1 ml-7'>
-                    <span className='flex items-center gap-1 text-gray-300 text-sm'>
-                      <svg width='18' height='18' fill='none' viewBox='0 0 24 24'>
-                        <circle cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='2' />
-                        <path d='M12 8v4l3 2' stroke='currentColor' strokeWidth='2' strokeLinecap='round' />
-                      </svg>
-                      Duration <span className='font-mono text-white ml-1'>{getDummyDuration(room.status)}</span>
-                    </span>
-                    <span className='flex items-center gap-1 text-gray-300 text-sm'>
-                      <svg width='18' height='18' fill='none' viewBox='0 0 24 24'>
-                        <path d='M9 18V5l12-2v13' stroke='currentColor' strokeWidth='2' strokeLinecap='round' />
-                        <circle cx='6' cy='18' r='3' stroke='currentColor' strokeWidth='2' />
-                        <circle cx='18' cy='16' r='3' stroke='currentColor' strokeWidth='2' />
-                      </svg>
-                      Songs Queue <span className='text-white ml-1'>{getDummyQueue(room.status)} Songs</span>
-                    </span>
-                  </div>
-                </div>
-                <div className='flex gap-2 mt-4 md:mt-0 items-center'>
-                  {room.status === 'Active' && (
-                    <button
-                      className='bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-bold text-base transition'
-                      onClick={() => handleEndSession(room.id)}>
-                      End Session
-                    </button>
-                  )}
-                  {room.status === 'Standby' && (
-                    <button
-                      className='bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold text-base transition'
-                      onClick={() => handleStartSession(room.id)}>
-                      Start Session
-                    </button>
-                  )}
-                  {room.status === 'Inactive' && (
-                    <button
-                      className='bg-gray-700 text-gray-400 px-6 py-2 rounded-lg font-bold text-base cursor-not-allowed'
-                      disabled>
-                      Start Session
-                    </button>
-                  )}
-                  <button
-                    className={`ml-2 p-2 rounded-full border-2 ${
-                      room.status !== 'Inactive'
-                        ? 'border-blue-500 bg-blue-900 text-blue-400 hover:bg-blue-700'
-                        : 'border-gray-600 bg-gray-800 text-gray-500 cursor-not-allowed'
-                    }`}
-                    disabled={room.status === 'Inactive'}>
-                    <svg width='22' height='22' fill='none' viewBox='0 0 24 24'>
-                      <path d='M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z' stroke='currentColor' strokeWidth='2' />
-                      <path
-                        d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z'
-                        stroke='currentColor'
-                        strokeWidth='2'
-                      />
-                    </svg>
-                  </button>
-                </div>
+            <div className='relative'>
+              <div className='absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none'>
+                <svg
+                  className='w-5 h-5 text-gray-400'
+                  fill='none'
+                  stroke='currentColor'
+                  viewBox='0 0 24 24'
+                  xmlns='http://www.w3.org/2000/svg'>
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth='2'
+                    d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'></path>
+                </svg>
               </div>
-            ))}
-            {rooms.length === 0 && <div className='text-gray-400 text-center py-8'>No room found</div>}
+              <input
+                type='text'
+                placeholder='Search rooms'
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className='pl-10 pr-10 py-2 rounded-lg bg-gray-700/50 text-white outline-none border border-gray-600 w-80'
+              />
+              {search && (
+                <button className='absolute inset-y-0 right-0 flex items-center pr-3' onClick={() => setSearch('')}>
+                  <svg
+                    className='w-5 h-5 text-gray-400 hover:text-white'
+                    fill='none'
+                    stroke='currentColor'
+                    viewBox='0 0 24 24'
+                    xmlns='http://www.w3.org/2000/svg'>
+                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth='2' d='M6 18L18 6M6 6l12 12'></path>
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Room List */}
+          <div className='flex flex-col gap-5'>
+            {filteredRooms.length > 0 ? (
+              filteredRooms.map((room) => (
+                <CardRoom
+                  room={room}
+                  key={room.id}
+                  handleStartSession={handleStartSession}
+                  handleStopSession={handleEndSession}
+                  handleDetail={() => onDetail(room)}
+                  showNotif={showNotif}
+                  handleShutdown={() => {
+                    setRoom(room)
+                    setConfirmShutdown(room.id)
+                  }}
+                  isWaiting={isWaiting}
+                />
+              ))
+            ) : (
+              <div className='bg-[#1f1f1f] rounded-xl p-8 text-center'>
+                <div className='text-gray-200 mb-2'>No rooms found matching "{search}"</div>
+                <button onClick={() => setSearch('')} className='text-gray-400 underline hover:text-white'>
+                  Clear search
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      </div>
-      {/* Kanan: Info Panel */}
-      <div className='flex flex-col gap-6 h-full relative'>
-        {/* Waktu & Activities */}
-        <div className='flex flex-col gap-4'>
-          {/* Waktu dengan background gambar */}
-          <div className='rounded-2xl bg-[url("./bg_dashboard.png")] bg-cover bg-center p-5 flex flex-col mb-2 shadow-md relative overflow-hidden'>
-            <div className='z-10 flex flex-col gap-1'>
+
+        {/* Right: Info Panel */}
+        <div className='flex flex-col gap-6'>
+          {/* Date & Time Card */}
+          <div className='rounded-2xl bg-[url("./bg_frame.png")] bg-cover bg-center p-5'>
+            <div className='flex flex-col gap-1'>
               <div className='flex items-center gap-2'>
-                <span className='bg-black/60 rounded px-2 py-1 text-xs text-white flex items-center gap-1'>
-                  <svg width='16' height='16' fill='none' viewBox='0 0 24 24'>
-                    <rect width='24' height='24' rx='6' fill='#23262e' />
-                    <path d='M12 8v4l3 2' stroke='#fff' strokeWidth='2' strokeLinecap='round' />
-                    <circle cx='12' cy='12' r='10' stroke='#fff' strokeWidth='2' />
-                  </svg>
-                  Today is a fantastic day!
-                </span>
+                <span className='py-1 text-xs text-white'>Today is a fantastic day!</span>
               </div>
-              <div className='font-bold text-lg text-white drop-shadow'>Tuesday, 26 June 2025</div>
-              <div className='text-sm text-white/90'>18:30 WITA</div>
+              <div className='font-bold text-lg text-white'>{currentDate}</div>
+              <div className='text-sm text-white/90'>{currentTime}</div>
             </div>
           </div>
+
           {/* Activities */}
-          <div className='mt-2'>
+          <div>
             <div className='font-semibold text-white mb-2'>Activities</div>
             <div className='flex flex-col gap-2'>
-              {/* Item 1 */}
-              <div className='flex items-center justify-between bg-[#23262e] rounded-lg px-3 py-2'>
-                <span className='text-white text-sm'>
-                  Calling to room <span className='text-lime-400 font-semibold'>Tune Oasis</span>
-                </span>
-                <span className='flex gap-1'>
-                  <button className='bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold'>
-                    ✕
-                  </button>
-                  <button className='bg-green-600 hover:bg-green-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold'>
-                    ✓
-                  </button>
-                </span>
-              </div>
-              {/* Item 2 */}
-              <div className='flex items-center justify-between bg-[#23262e] rounded-lg px-3 py-2'>
-                <span className='text-white text-sm'>
-                  Calling to room <span className='text-green-300 font-semibold'>Melody Haven</span>
-                </span>
-                <span className='bg-green-900 text-green-400 rounded px-3 py-1 text-xs font-semibold'>Accepted</span>
-              </div>
-              {/* Item 3 */}
-              <div className='flex items-center justify-between bg-[#23262e] rounded-lg px-3 py-2'>
-                <span className='text-white text-sm'>
-                  Calling to room <span className='text-yellow-300 font-semibold'>Harmony Hub</span>
-                </span>
-                <span className='bg-red-900 text-red-400 rounded px-3 py-1 text-xs font-semibold'>Rejected</span>
-              </div>
-              {/* Item 4 */}
-              <div className='flex items-center justify-between bg-[#23262e] rounded-lg px-3 py-2'>
-                <span className='text-white text-sm'>Add/Update Library</span>
-                <span className='bg-green-900 text-green-400 rounded px-3 py-1 text-xs font-semibold'>Completed</span>
-              </div>
-              {/* Item 5 */}
-              <div className='flex items-center justify-between bg-[#23262e] rounded-lg px-3 py-2'>
-                <span className='text-white text-sm'>Save song metadata</span>
-                <span className='bg-green-900 text-green-400 rounded px-3 py-1 text-xs font-semibold'>Completed</span>
-              </div>
+              {/* Active Calls */}
+              {activeCalls.map((call) => (
+                <div key={call.id} className='flex items-center justify-between bg-[#23262e] rounded-lg px-3 py-2'>
+                  <span className='text-white text-sm'>
+                    Calling to room <span className='text-lime-400 font-semibold'>{call.room_name}</span>
+                  </span>
+                  <span className='flex gap-1'>
+                    <button
+                      className='bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold'
+                      onClick={() => handleRejectCall(call.id)}>
+                      ✕
+                    </button>
+                    <button
+                      className='bg-green-600 hover:bg-green-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold'
+                      onClick={() => handleAcceptCall(call.id)}>
+                      ✓
+                    </button>
+                  </span>
+                </div>
+              ))}
+
+              {/* Recent Completed Calls */}
+              {recentCalls.map((call) => (
+                <div key={call.id} className='flex items-center justify-between bg-[#23262e] rounded-lg px-3 py-2'>
+                  <span className='text-white text-sm'>
+                    Calling to room{' '}
+                    <span
+                      className={
+                        call.status === 'Accepted' ? 'text-green-300 font-semibold' : 'text-yellow-300 font-semibold'
+                      }>
+                      {call.room_name}
+                    </span>
+                    <span className='text-gray-400 text-xs ml-2'>{formatTimestamp(call.created_at)}</span>
+                  </span>
+                  <span
+                    className={`rounded px-3 py-1 text-xs font-semibold ${
+                      call.status === 'Accepted' ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'
+                    }`}>
+                    {call.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Shutdown All Room */}
+          <div className='mt-auto'>
+            <div className='bg-[#1f1f1f] rounded-xl p-6'>
+              <div className='font-bold text-white mb-2'>Shutdown All Room</div>
+              <button
+                className='bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg text-lg w-full'
+                onClick={() => setConfirmAction('shutdown')}>
+                Shutdown
+              </button>
             </div>
           </div>
         </div>
-        {/* Shutdown All Room sticky di bawah */}
-        <div className='mt-auto'>
-          <div className='bg-gray-800 rounded-xl p-6 flex flex-col gap-4'>
-            <div className='font-bold text-white mb-2'>Shutdown All Room</div>
-            <button
-              className='bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg text-lg'
-              onClick={handleShutdownAll}>
-              Shutdown
-            </button>
+      </div>
+      {confirmAction && (
+        <div className='fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50'>
+          <div className='bg-[#1f1f1f] rounded-lg p-6 shadow-lg'>
+            <p className='mb-4 text-white'>Apakah Anda yakin ingin mematikan semua room?</p>
+            <div className='flex justify-end gap-2'>
+              <button
+                className='px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400'
+                onClick={() => setConfirmAction(null)}>
+                Cancel
+              </button>
+              <button
+                className='px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700'
+                onClick={() => {
+                  handleShutdownAll()
+                  setConfirmAction(null)
+                }}>
+                Confirm
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+      {confirmShutdown && (
+        <div className='fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50'>
+          <div className='bg-[#1f1f1f] rounded-lg p-6 shadow-lg'>
+            <p className='mb-4 text-white'>Apakah Anda yakin ingin mematikan room ini?</p>
+            <div className='flex justify-end gap-2'>
+              <button
+                className='px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400'
+                onClick={() => setConfirmShutdown(null)}>
+                Cancel
+              </button>
+              <button className='px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700' onClick={handleShutdown}>
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

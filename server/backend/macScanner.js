@@ -7,19 +7,23 @@ const axios = require('axios')
 
 // Ambil daftar room yang punya mac_address
 async function getRooms() {
-  const [rows] = await pool.query('SELECT id, mac_address FROM rooms WHERE mac_address IS NOT NULL')
+  const [rows] = await pool.query('SELECT id, mac_address, name FROM rooms WHERE mac_address IS NOT NULL')
   return rows
 }
 
 // Update IP room dan kirim update ke client
-async function updateRoomIP(id, ip, mac) {
-  await pool.query('UPDATE rooms SET ip_address = ? WHERE id = ?', [ip, id])
-  console.log(`Updated room ${id} with IP ${ip}`)
+async function updateRoomIP(id, ip, mac, name) {
   // Kirim update ke client
-  const serverIp = getServerIp()
   try {
-    await axios.post(`http://${ip}:5771/updateserver`, { server_ip: serverIp, client_mac: mac }, { timeout: 2000 })
+    const serverIp = getServerIp()
+    await axios.post(
+      `http://${ip}:5771/updateserver`,
+      { server_ip: serverIp + ':4000', client_mac: mac, client_room_id: String(id), client_room_name: name },
+      { timeout: 2000 }
+    )
     console.log(`Berhasil update server_ip ke client ${ip}`)
+    await pool.query('UPDATE rooms SET ip_address = ? WHERE id = ?', [ip, id])
+    console.log(`Updated room ${id} with IP ${ip}`)
   } catch (err) {
     console.log(`Gagal update server_ip ke client ${ip}: ${err.message}`)
   }
@@ -83,6 +87,46 @@ function getServerIp() {
   return '127.0.0.1'
 }
 
+// Fungsi untuk menyimpan MAC address ke master_mac
+async function saveMacToMaster(macAddress) {
+  try {
+    // Check if MAC already exists in master_mac
+    const [existingRows] = await pool.query('SELECT mac_address FROM master_mac WHERE mac_address = ?', [macAddress])
+
+    // If MAC doesn't exist, insert it
+    if (existingRows.length === 0) {
+      await pool.query('INSERT INTO master_mac (mac_address) VALUES (?)', [macAddress])
+      return true
+    }
+    return false
+  } catch (error) {
+    console.error('Failed to save MAC to master_mac:', error)
+    return false
+  }
+}
+
+// Fungsi untuk mendapatkan semua MAC dari ARP table
+async function getAllMACsFromARP() {
+  try {
+    const { stdout } = await execAsync('arp -a')
+    const lines = stdout.split('\n')
+    const macs = []
+
+    for (const line of lines) {
+      // Extract MAC address from ARP table line
+      const macMatch = line.match(/([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})/g)
+      if (macMatch) {
+        macs.push(macMatch[0])
+      }
+    }
+
+    return macs
+  } catch (error) {
+    console.error('Failed to read ARP table:', error)
+    return []
+  }
+}
+
 // Fungsi utama: scan dan update semua room
 async function scanAndUpdateRooms() {
   const log = []
@@ -90,11 +134,24 @@ async function scanAndUpdateRooms() {
     const subnet = getLocalSubnet()
     log.push(`Pinging subnet: ${subnet}`)
     await pingSubnet(subnet)
+
+    // Get all MACs from ARP table and save to master_mac
+    const allMacs = await getAllMACsFromARP()
+    log.push(`Found ${allMacs.length} MAC addresses in ARP table`)
+
+    // Save all detected MACs to master_mac table
+    for (const mac of allMacs) {
+      const isNewMac = await saveMacToMaster(mac)
+      if (isNewMac) {
+        log.push(`Added new MAC to master: ${mac}`)
+      }
+    }
+
     const rooms = await getRooms()
     for (const room of rooms) {
       const ip = await getIPFromMAC(room.mac_address)
       if (ip) {
-        await updateRoomIP(room.id, ip, room.mac_address)
+        await updateRoomIP(room.id, ip, room.mac_address, room.name)
         log.push(`Room ${room.id} (${room.mac_address}) -> IP ${ip}`)
       } else {
         log.push(`IP untuk MAC ${room.mac_address} tidak ditemukan`)

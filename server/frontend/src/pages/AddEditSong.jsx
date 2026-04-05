@@ -87,13 +87,10 @@ export default function AddEditSong({ mode, songId, onBack }) {
   return (
     <div>
       <div className='flex items-center mb-6'>
-        <button onClick={onBack} className='mr-4 text-fuchsia font-bold text-lg'>
-          &larr; Back
-        </button>
         <div className='text-2xl font-bold'>{isEdit ? 'Edit Song' : 'Add New Songs'}</div>
       </div>
       <form className='w-full shadow-lg' onSubmit={handleSubmit} encType='multipart/form-data'>
-        <div className='bg-[#161f33] rounded-xl p-8 grid grid-cols-1 md:grid-cols-2 gap-8'>
+        <div className='bg-grayBg rounded-xl p-8 grid grid-cols-1 md:grid-cols-2 gap-8'>
           <div>
             <InputField
               label='Song Title'
@@ -147,7 +144,7 @@ export default function AddEditSong({ mode, songId, onBack }) {
             <FilePicker
               label='Thumbnail'
               name='thumbnail'
-              accept='image/*'
+              accept='.jpg, .png, .jpeg'
               onChange={handleChange}
               file={form.thumbnail}
               helper='*jpg, *png files are allowed   max file 50mb'
@@ -155,10 +152,10 @@ export default function AddEditSong({ mode, songId, onBack }) {
             <FilePicker
               label='Upload Songs'
               name='songfile'
-              accept='.mp3,.wav,.ogg,.flac,.aac,.m4a,.wma,.mp4,.mov'
+              accept='.dat, .mp4, .mpg'
               onChange={handleChange}
               file={form.songfile}
-              helper='*mov, *mp4 files are allowed   max file 200mb'
+              helper='*dat, *mp4 files are allowed   max file 200mb'
             />
           </div>
         </div>

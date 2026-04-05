@@ -1,484 +1,184 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, screen } = require('electron')
 const path = require('path')
 const fs = require('fs')
-const loudness = require('loudness')
-const { speaker, microphone } = require('win-audio')
 const Database = require('better-sqlite3')
 const macaddress = require('macaddress')
+const { exec, spawn } = require('child_process')
+// Tambahkan Express server untuk static file
+const express = require('express')
+const httpServer = express()
+const license = require('./license')
+const ytSearch = require('yt-search')
 
-// Helper untuk path storage agar selalu relatif ke lokasi .exe
+httpServer.use(express.static(path.join(__dirname, '..', 'public')))
+const PORT = 5772
+httpServer.listen(PORT, () => {
+  console.log('Static server running on http://localhost:' + PORT)
+})
+
+// Helper to get the base path, works for dev and prod
 function getAppBasePath() {
-  // Saat development: __dirname (src)
-  // Saat production: path ke folder .exe
-  if (process.env.NODE_ENV === 'development') {
-    return path.join(__dirname, '..')
-  } else {
-    return process.cwd()
-  }
+  return process.env.NODE_ENV === 'development' ? path.join(__dirname, '..') : process.cwd()
 }
 
 const basePath = getAppBasePath()
-const dbPath = path.join(basePath, 'storage', 'database.sqlite')
-const db = new Database(dbPath)
-
-// Jika folder storage tidak ada maka buat
+// Ensure storage directory exists
 const storageDir = path.join(basePath, 'storage')
 if (!fs.existsSync(storageDir)) {
   fs.mkdirSync(storageDir, { recursive: true })
 }
+// Initialize database
+const dbPath = path.join(basePath, 'storage', 'database.sqlite')
+const db = new Database(dbPath)
 
-// Inisialisasi tabel jika belum ada
-// Songs
-const createSongsTable = `CREATE TABLE IF NOT EXISTS songs (
-  id INTEGER PRIMARY KEY,
-  title TEXT,
-  artist TEXT,
-  genre TEXT,
-  album TEXT,
-  release_date TEXT,
-  duration TEXT,
-  play_count INTEGER,
-  created_at TEXT,
-  updated_at TEXT
-)`
-db.prepare(createSongsTable).run()
-// Playlist
-const createPlaylistTable = `CREATE TABLE IF NOT EXISTS playlist (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  song_id INTEGER
-)`
-db.prepare(createPlaylistTable).run()
-// Carousels
-const createCarouselsTable = `CREATE TABLE IF NOT EXISTS carousels (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT,
-  description TEXT
-)`
-db.prepare(createCarouselsTable).run()
-// Banner
-const createBannersTable = `CREATE TABLE IF NOT EXISTS banners (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT,
-  description TEXT,
-  created_at TEXT,
-  updated_at TEXT
-)`
-db.prepare(createBannersTable).run()
-
-// Fungsi utilitas untuk CRUD
-function getAll(table) {
-  return db.prepare(`SELECT * FROM ${table}`).all()
-}
-function addToPlaylist(song) {
-  db.prepare('INSERT INTO playlist (song_id) VALUES (?)').run(song.id)
-}
-function truncatePlaylist() {
-  db.prepare('DELETE FROM playlist').run()
-}
-function removeFromPlaylist(id) {
-  db.prepare('DELETE FROM playlist WHERE song_id = ?').run(id)
-}
-function seedSongs() {
-  const count = db.prepare('SELECT COUNT(*) as cnt FROM songs').get().cnt
-  if (count > 0) return
-  const insert = db.prepare(
-    'INSERT INTO songs (id, title, artist, genre, album, release_date, duration, play_count, created_at, updated_at) VALUES (@id, @title, @artist, @genre, @album, @release_date, @duration, @play_count, @created_at, @updated_at)'
-  )
-  const songs = [
-    {
-      id: 1,
-      title: 'Sorfcore',
-      artist: 'The neighbourhood',
-      genre: 'Indie',
-      album: 'Hard to Imagine the Neighbourhood Ever Changing',
-      release_date: '2015-10-02',
-      duration: '3:26',
-      play_count: 234,
-      created_at: '2023-11-04T14:30:00',
-      updated_at: '2023-11-04T14:30:00'
-    },
-    {
-      id: 2,
-      title: 'Skyfall Beats',
-      artist: 'nightmares',
-      genre: 'Electronic',
-      album: 'nightmares',
-      release_date: '2020-11-12',
-      duration: '2:45',
-      play_count: 100,
-      created_at: '2023-10-26T16:15:00',
-      updated_at: '2023-10-26T16:15:00'
-    },
-    {
-      id: 3,
-      title: 'Greedy',
-      artist: 'tate mcrae',
-      genre: 'Pop',
-      album: 'Greedy',
-      release_date: '2022-05-20',
-      duration: '2:11',
-      play_count: 50,
-      created_at: '2023-12-30T18:00:00',
-      updated_at: '2023-12-30T18:00:00'
-    },
-    {
-      id: 4,
-      title: 'Lovin On me',
-      artist: 'jack harlow',
-      genre: 'Indie',
-      album: 'Lovin On me',
-      release_date: '2022-08-26',
-      duration: '2:18',
-      play_count: 200,
-      created_at: '2023-12-30T19:30:00',
-      updated_at: '2023-12-30T19:30:00'
-    },
-    {
-      id: 5,
-      title: 'pain the town red',
-      artist: 'Doja Cat',
-      genre: 'Pop',
-      album: 'Paint The Town Red',
-      release_date: '2022-09-23',
-      duration: '3:51',
-      play_count: 150,
-      created_at: '2023-12-29T20:00:00',
-      updated_at: '2023-12-29T20:00:00'
-    },
-    {
-      id: 6,
-      title: 'The Lonliest',
-      artist: 'Måneskin',
-      genre: 'Rock',
-      album: 'The Lonliest',
-      release_date: '2022-10-07',
-      duration: '3:26',
-      play_count: 300,
-      created_at: '2023-12-30T21:00:00',
-      updated_at: '2023-12-30T21:00:00'
-    },
-    {
-      id: 7,
-      title: 'Someone like you',
-      artist: 'Adele',
-      genre: 'Pop',
-      album: '21',
-      release_date: '2011-01-24',
-      duration: '4:45',
-      play_count: 500,
-      created_at: '2023-12-30T22:00:00',
-      updated_at: '2023-12-30T22:00:00'
-    },
-    {
-      id: 8,
-      title: "I Heard That You're Settled Down",
-      artist: 'Unknown Artist',
-      genre: 'Rock',
-      album: 'Unknown Album',
-      release_date: '2015-05-12',
-      duration: '3:17',
-      play_count: 100,
-      created_at: '2023-12-30T23:30:00',
-      updated_at: '2023-12-30T23:30:00'
-    }
-  ]
-  for (const song of songs) insert.run(song)
-}
-
-function seedCarousels() {
-  const count = db.prepare('SELECT COUNT(*) as cnt FROM carousels').get().cnt
-  if (count > 0) return
-  const insert = db.prepare('INSERT INTO carousels (title, description) VALUES (@title, @description)')
-  const carousels = [
-    {
-      title: 'Sing Your Heart Out.\nThe Ultimate Karaoke Collection!',
-      description:
-        'Discover our karaoke app, where you can dive into a fantastic library of both classic hits and the latest chart-toppers. Sing along to your favorite songs in stunning quality, all while enjoying a seamless experience. No matter your musical preference, we have the perfect tracks to get you singing!'
-    },
-    {
-      title: 'Koleksi Lagu Terbaru',
-      description: 'Nikmati update lagu-lagu terbaru setiap minggu, langsung dari chart dunia!'
-    },
-    {
-      title: 'Karaoke Kualitas Tinggi',
-      description: 'Audio jernih dan lirik realtime, pengalaman karaoke terbaik untuk semua usia.'
-    },
-    {
-      title: 'Buat Playlist Favoritmu',
-      description: 'Susun dan simpan lagu favoritmu, siap dinyanyikan kapan saja!'
-    }
-  ]
-  for (const carousel of carousels) insert.run(carousel)
-}
-
-// Ensure DB file and structure
-fs.mkdirSync(path.dirname(dbPath), { recursive: true })
-
-// YouTube TV User Agent
-const youtubeTVUserAgent =
-  'Mozilla/5.0 (X11; Linux i686) AppleWebKit/534.24 (KHTML, like Gecko) Chrome/11.0.696.77 Large Screen Safari/534.24 GoogleTV/092754'
-
-// YouTube TV Overlay JavaScript
-const youtubeTVOverlay = `
-(function() {
-  // Create overlay container
-  const overlay = document.createElement('div');
-  overlay.id = 'melodies-overlay';
-  overlay.style.cssText = \`
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    z-index: 9999;
-    pointer-events: none;
-  \`;
-
-  // Create back button
-  const backButton = document.createElement('button');
-  backButton.id = 'melodies-back-btn';
-  backButton.innerHTML = '← Back to Melodies';
-  backButton.style.cssText = \`
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    border: none;
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    pointer-events: auto;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-  \`;
-
-  // Add hover effect
-  backButton.addEventListener('mouseenter', () => {
-    backButton.style.background = 'rgba(255, 0, 0, 0.9)';
-    backButton.style.transform = 'scale(1.05)';
-  });
-
-  backButton.addEventListener('mouseleave', () => {
-    backButton.style.background = 'rgba(0, 0, 0, 0.8)';
-    backButton.style.transform = 'scale(1)';
-  });
-
-  // Add click handler
-  backButton.addEventListener('click', () => {
-    if (window.electronAPI) {
-      window.electronAPI.loadHome();
-    }
-  });
-
-  // Append elements
-  overlay.appendChild(backButton);
-  document.body.appendChild(overlay);
-
-  // Auto-hide overlay after 3 seconds
-  setTimeout(() => {
-    overlay.style.opacity = '0';
-    overlay.style.transition = 'opacity 0.5s ease';
-  }, 3000);
-
-  // Show overlay on mouse move
-  let hideTimeout;
-  document.addEventListener('mousemove', () => {
-    overlay.style.opacity = '1';
-    clearTimeout(hideTimeout);
-    hideTimeout = setTimeout(() => {
-      overlay.style.opacity = '0';
-    }, 3000);
-  });
-
-  console.log('Melodies YouTube TV overlay loaded');
-})();
-`
-
-// Store main window reference
+// Window references
 let mainWindow = null
+let videoWindow = null
+
+app.disableHardwareAcceleration()
+
+function createVideoWindow() {
+  const displays = screen.getAllDisplays()
+  const externalDisplay = displays.find((d) => d.bounds.x !== 0 || d.bounds.y !== 0)
+
+  if (videoWindow) {
+    videoWindow.close()
+    videoWindow = null
+  }
+
+  if (externalDisplay) {
+    videoWindow = new BrowserWindow({
+      x: externalDisplay.bounds.x,
+      y: externalDisplay.bounds.y,
+      width: externalDisplay.bounds.width,
+      height: externalDisplay.bounds.height,
+      fullscreen: true,
+      frame: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'dist', 'preload.bundle.js'),
+        contextIsolation: true,
+        webSecurity: false, // Nonaktifkan web security agar YouTube embed bisa berjalan
+        sandbox: false // Pastikan sandbox juga nonaktif
+      }
+    })
+    // Set user-agent agar YouTube tidak mendeteksi Electron
+    videoWindow.webContents.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+    )
+    // Ganti loadFile menjadi loadURL ke static server
+    videoWindow.loadURL('http://localhost:5772/video.html')
+    videoWindow.on('closed', () => {
+      videoWindow = null
+    })
+  } else {
+    console.log('No secondary display found.')
+  }
+}
+
+function reloadAllWindows() {
+  console.log(`Reloading window ${mainWindow}`)
+
+  videoWindow?.webContents.reloadIgnoringCache()
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1920,
     height: 1080,
     fullscreen: true,
+    kiosk: true,
     frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'dist', 'preload.bundle.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false
+      contextIsolation: true
     }
   })
-
   mainWindow.loadFile('public/index.html')
   if (process.env.NODE_ENV === 'development') mainWindow.webContents.openDevTools()
+  mainWindow.on('closed', () => {
+    if (videoWindow) videoWindow.close()
+  })
 }
 
-ipcMain.handle('getData', (_, collection) => {
-  return getAll(collection)
+// --- ALL IPC HANDLERS ---
+
+// Database & File System
+
+ipcMain.handle('reload-window', () => {
+  reloadAllWindows()
 })
 
-ipcMain.handle('addToPlaylist', (_, song) => {
-  addToPlaylist(song)
+ipcMain.handle('start-keyblocker', () => {
+  // Mulai KeyBlocker
+  const keyBlockerPath = path.join(basePath, 'KeyBlocker.exe') // Sesuaikan path-nya
+  keyBlockerProcess = spawn(keyBlockerPath, [], {
+    detached: true,
+    stdio: 'ignore' // Supaya tidak ngelag/tergantung Electron
+  })
+  keyBlockerProcess.unref()
 })
 
-ipcMain.handle('truncateDb', () => {
-  truncatePlaylist()
-})
+ipcMain.handle('close-keyblocker', () => {
+  console.log('Closing KeyBlocker...')
 
-ipcMain.handle('remove-from-playlist', async (_, id) => {
-  removeFromPlaylist(id)
-  return true
-})
-
-ipcMain.handle('seedDb', () => {
-  seedSongs()
-  seedCarousels()
-})
-
-ipcMain.handle('getPlaylist', () => {
-  return db.prepare('SELECT B.* FROM playlist A inner join songs B on A.song_id = B.id').all()
-})
-
-ipcMain.handle('getStorageBaseDir', () => {
-  return path.resolve(basePath, 'storage')
-})
-
-ipcMain.handle('fileExists', (_, filePath) => {
-  return fs.existsSync(filePath)
-})
-
-// Handler untuk load YouTube TV
-ipcMain.handle('loadYouTubeTV', () => {
-  if (mainWindow) {
-    mainWindow.setFullScreen(true)
-
-    mainWindow.loadURL('https://www.youtube.com/tv?', {
-      userAgent: youtubeTVUserAgent
-    })
-
-    mainWindow.webContents.once('did-finish-load', () => {
-      mainWindow.setFullScreen(true)
-
-      mainWindow.webContents.enableDeviceEmulation({
-        screenSize: { width: 3840, height: 2160 },
-        viewSize: { width: 1920, height: 1080 },
-        scale: 1,
-        screenPosition: 'desktop',
-        deviceScaleFactor: 1
-      })
-
-      setTimeout(() => {
-        mainWindow.webContents.executeJavaScript(youtubeTVOverlay)
-      }, 1000)
-    })
-  }
-})
-
-// Handler untuk kembali ke Home
-ipcMain.handle('loadHome', () => {
-  if (mainWindow) {
-    mainWindow.webContents.disableDeviceEmulation()
-    mainWindow.setFullScreen(true)
-    mainWindow.setBounds({ x: 0, y: 0, width: 1920, height: 1080 }) // Sesuaikan dengan resolusi monitor kamu
-    mainWindow.loadFile('public/index.html')
-  }
-})
-
-ipcMain.handle('injectYoutubeSearch', async (_, keyword) => {
-  if (mainWindow) {
-    const script = `
-      (function() {
-        console.log('Injecting search');
-        const trySearch = setInterval(() => {
-          const buttons = document.querySelectorAll('button');
-          const searchButton = Array.from(buttons).find(btn => btn.getAttribute('aria-label') === 'Search');
-
-          if (searchButton) {
-            searchButton.click();
-            clearInterval(trySearch);
-
-            setTimeout(() => {
-              const inputs = document.querySelectorAll('input');
-              const input = Array.from(inputs).find(inp => inp.type === 'text');
-
-              if (input) {
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                nativeInputValueSetter.call(input, "${keyword.replace(/"/g, '\\"')}");
-
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-
-                const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true });
-                input.dispatchEvent(enterEvent);
-              } else {
-                console.log('Input not found');
-              }
-            }, 1000);
-          } else {
-            console.log('Search button not found');
-          }
-        }, 1000);
-      })();
-    `
-    mainWindow.webContents.executeJavaScript(script)
-  }
-})
-
-// Handler untuk set/get volume sistem (output)
-ipcMain.handle('set-system-volume', async (_, value) => {
-  speaker.set(Math.round(value * 100))
-})
-
-ipcMain.handle('get-system-volume', async () => {
-  return speaker.get() / 100
-})
-
-// Handler untuk set/get volume mic (input)
-ipcMain.handle('set-mic-volume', async (_, value) => {
-  microphone.set(Math.round(value * 100))
-})
-
-ipcMain.handle('get-mic-volume', async () => {
-  console.log(microphone.get())
-  return microphone.get() / 100
-})
-
-ipcMain.handle('getServerUrl', async () => {
-  try {
-    const row = db.prepare("SELECT value FROM sys_params WHERE key = 'server_ip'").get()
-    if (row && row.value) {
-      let url = row.value
-      if (!/^https?:\/\//.test(url)) url = 'http://' + url
-      return url + ':4000'
+  exec('taskkill /IM KeyBlocker.exe /F', (err, stdout, stderr) => {
+    if (err) {
+      console.error('Failed to close KeyBlocker:', err)
     }
-    return null
-  } catch {
-    return null
+  })
+})
+
+ipcMain.handle('getSongs', () => db.prepare('SELECT * FROM songs ORDER BY title COLLATE NOCASE ASC').all())
+ipcMain.handle('getStorageBaseDir', () => path.resolve(basePath, 'storage'))
+ipcMain.handle('get-server-url', async () => {
+  // Ambil dari SQLite atau variabel konfigurasi yang sudah kamu pakai
+  const server_ip = getSysParamFromDb('server_ip')
+  const url = `http://${server_ip}`
+  return url
+})
+
+ipcMain.handle('save-file', (_, filePath, buffer) => {
+  try {
+    const dir = path.dirname(filePath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(filePath, buffer)
+    return true
+  } catch (err) {
+    console.error('Failed to save file:', err)
+    logToFile(`Failed to save file ${filePath}: ${err.message}`)
+    return false
   }
 })
 
-ipcMain.handle('getMac', async () => {
-  return macaddress.all()
+ipcMain.handle('getBannerImages', async () => {
+  try {
+    const bannersDir = path.join(basePath, 'storage', 'banners')
+    const files = fs.readdirSync(bannersDir)
+    return files
+      .filter((f) => /\.(jpg|jpeg|png)$/i.test(f))
+      .map((f) => 'file://' + path.join(bannersDir, f).replace(/\\/g, '/'))
+  } catch (e) {
+    return []
+  }
 })
 
+// Room Status
 ipcMain.handle('room-status-by-mac', async () => {
   try {
     const rowIp = db.prepare("SELECT value FROM sys_params WHERE key = 'server_ip'").get()
     const rowMac = db.prepare("SELECT value FROM sys_params WHERE key = 'client_mac'").get()
-    if (!rowIp || !rowIp.value || !rowMac || !rowMac.value) return { status: 'Inactive' }
+    if (!rowIp?.value || !rowMac?.value) return { status: 'Inactive' }
+
     let url = rowIp.value
     if (!/^https?:\/\//.test(url)) url = 'http://' + url
-    url = url + '/rooms/by-mac/' + rowMac.value
+    url = `${url}/rooms/by-mac/${rowMac.value}`
+
     const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
     const res = await fetch(url)
-    return res.json()
-
     if (!res.ok) return { status: 'Inactive' }
-    const data = await res.json()
-    return data
+    return res.json()
   } catch (e) {
-    console.log(e)
-
+    console.error('Failed to get room status:', e)
     return { status: 'Inactive' }
   }
 })
@@ -487,10 +187,12 @@ ipcMain.handle('update-room-status-by-mac', async (_, status) => {
   try {
     const rowIp = db.prepare("SELECT value FROM sys_params WHERE key = 'server_ip'").get()
     const rowMac = db.prepare("SELECT value FROM sys_params WHERE key = 'client_mac'").get()
-    if (!rowIp || !rowIp.value || !rowMac || !rowMac.value) return false
+    if (!rowIp?.value || !rowMac?.value) return false
+
     let url = rowIp.value
     if (!/^https?:\/\//.test(url)) url = 'http://' + url
-    url = url + '/rooms/by-mac/' + rowMac.value
+    url = `${url}/rooms/by-mac/${rowMac.value}`
+
     const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
     const res = await fetch(url, {
       method: 'PUT',
@@ -499,57 +201,440 @@ ipcMain.handle('update-room-status-by-mac', async (_, status) => {
     })
     return res.ok
   } catch (e) {
+    console.error('Failed to update room status:', e)
     return false
   }
+})
+
+// Video Window Control
+ipcMain.handle('open-video-window', () => {
+  if (!videoWindow) createVideoWindow()
+})
+ipcMain.handle('close-video-window', () => {
+  if (videoWindow) videoWindow.close()
+})
+ipcMain.handle('send-video-control', (_, command) => {
+  console.log('Sending video control command:', command)
+  if (videoWindow) {
+    console.log(command)
+    videoWindow.webContents.send('video-control', command)
+  }
+})
+
+// Config
+ipcMain.handle('get-config', () => {
+  try {
+    const configPath = path.join(getAppBasePath(), 'src', 'config.json')
+    const rawConfig = fs.readFileSync(configPath)
+    return JSON.parse(rawConfig)
+  } catch (error) {
+    console.error('Failed to read config file:', error)
+    return {}
+  }
+})
+
+// YouTube Search
+// ipcMain.handle('search-youtube', async (_, { apiKey, query }) => {
+//   if (!apiKey || apiKey === 'YOUR_YOUTUBE_API_KEY_HERE') {
+//     return { error: 'YouTube API key is not set.' }
+//   }
+//   const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&q=${encodeURIComponent(
+//     query
+//   )}&key=${apiKey}&type=video`
+//   try {
+//     const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+//     const response = await fetch(url)
+//     const data = await response.json()
+//     if (data.error) {
+//       return { error: data.error.message }
+//     }
+//     return data.items.map((item) => ({
+//       id: item.id.videoId,
+//       title: item.snippet.title,
+//       artist: item.snippet.channelTitle,
+//       video_url: `https://www.youtube.com/embed/${item.id.videoId}?autoplay=1`
+//     }))
+//   } catch (error) {
+//     console.error('Failed to search YouTube:', error)
+//     return { error: 'Failed to fetch from YouTube API.' }
+//   }
+// })
+
+ipcMain.handle('search-youtube-new', async (_, query) => {
+  try {
+    if (!query.includes('lagu')) {
+      query = 'lagu ' + query
+    }
+    const result = await ytSearch(query)
+    const hasil = result.videos.map((video) => ({
+      id: video.videoId,
+      title: video.title,
+      artist: video.author.name,
+      video_url: video.url
+    }))
+    return hasil
+  } catch (error) {
+    console.error('Failed to search YouTube:', error)
+    return { error: 'Failed to search YouTube.' }
+  }
+})
+
+ipcMain.handle('get-sys-param', async (_, key) => {
+  const row = db.prepare('SELECT value FROM sys_params WHERE key = ?').get(key)
+  return row?.value || null
+})
+
+// Listen for time updates from video window and forward to main window
+ipcMain.on('video-time-update', (event, timeData) => {
+  if (mainWindow) {
+    mainWindow.webContents.send('video-time-update', timeData)
+  }
+})
+
+ipcMain.on('video-ended', () => {
+  if (mainWindow) {
+    mainWindow.webContents.send('video-ended')
+  }
+})
+
+ipcMain.on('add-to-playlist', (event, song) => {
+  if (mainWindow) {
+    mainWindow.webContents.send('add-to-playlist', song)
+  }
+})
+
+const getSysParamFromDb = (key) => {
+  try {
+    const row = db.prepare('SELECT value FROM sys_params WHERE key = ?').get(key)
+    return row ? row.value : null
+  } catch (err) {
+    console.error('Failed to get sysparam from db:', err)
+    return null
+  }
+}
+
+ipcMain.handle('sync-playlist-add', async (_, song) => {
+  try {
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+    const payload = {
+      room_id,
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      video_url: song.video_url || '',
+      is_youtube: !!song.isYoutube
+    }
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    await fetch(`http://${server_ip}/playlist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    return true
+  } catch (err) {
+    console.error('Failed to sync playlist add:', err)
+    return false
+  }
+})
+
+ipcMain.handle('sync-playlist-remove', async (_, songId) => {
+  try {
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    await fetch(`http://${server_ip}/playlist/${songId}?room_id=${room_id}`, {
+      method: 'DELETE'
+    })
+    return true
+  } catch (err) {
+    console.error('Failed to sync playlist remove:', err)
+    return false
+  }
+})
+
+ipcMain.handle('sync-playlist-remove-all', async () => {
+  try {
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    await fetch(`http://${server_ip}/playlist?room_id=${room_id}`, {
+      method: 'DELETE'
+    })
+    return true
+  } catch (err) {
+    console.error('Failed to sync playlist remove:', err)
+    return false
+  }
+})
+
+ipcMain.handle('sync-playlist-swap', async (_, songId1, songId2) => {
+  try {
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+    if (!songId1 || !songId2) throw new Error('songId1 and songId2 are required')
+
+    const payload = {
+      room_id,
+      song_id_1: songId1,
+      song_id_2: songId2
+    }
+
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    await fetch(`http://${server_ip}/playlist/swap`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    return true
+  } catch (err) {
+    console.error('Failed to sync playlist swap:', err)
+    return false
+  }
+})
+
+ipcMain.handle('sync-playlist-move-to-top', async (_, songId) => {
+  try {
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+    if (!songId) throw new Error('songId is required')
+
+    const payload = {
+      room_id,
+      song_id: songId
+    }
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    await fetch(`http://${server_ip}/playlist/move-to-top`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    return true
+  } catch (err) {
+    console.error('Failed to sync playlist move to top:', err)
+    return false
+  }
+})
+
+ipcMain.handle('fileExists', (_, filePath) => {
+  return fs.existsSync(filePath)
+})
+
+ipcMain.handle('checkAdmin', async (_, password) => {
+  try {
+    console.log('Checking admin password:', password)
+
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!server_ip) throw new Error('server_ip not found')
+
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    const res = await fetch(`http://${server_ip}/validate-admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    })
+    if (!res.ok) {
+      console.log('Failed to check admin password:', res.statusText)
+      return false
+    }
+    return res.ok
+  } catch (err) {
+    console.log('Failed to check admin password:', err)
+    console.error('Failed to check admin password:', err)
+    return err
+  }
+})
+
+ipcMain.handle('youtube-recommendations', async (_, apiKey) => {
+  try {
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!server_ip) throw new Error('server_ip not found')
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    const res = await fetch(`http://${server_ip}/youtube-history`)
+    if (!res.ok) throw new Error('Failed to get youtube recommendations')
+    const data = await res.json()
+    return data.data
+  } catch (err) {
+    console.error('Failed to get youtube recommendations:', err)
+    return []
+  }
+})
+
+ipcMain.handle('close-app', () => {
+  app.quit()
+})
+
+ipcMain.on('youtube-api-ready', () => {
+  mainWindow.webContents.send('app-ready')
 })
 
 ipcMain.handle('get-banner-images', async () => {
   try {
     const bannersDir = path.join(basePath, 'storage', 'banners')
     const files = fs.readdirSync(bannersDir)
-    const images = files
-      .filter((f) => /\.(jpg|jpeg|png)$/i.test(f))
-      .map((f) => 'file://' + path.join(bannersDir, f).replace(/\\/g, '/'))
-    return images
+    const mediaFiles = files
+      .filter((f) => /\.(jpg|jpeg|png|mp4)$/i.test(f))
+      .map((f) => ({
+        src: 'file://' + path.join(bannersDir, f).replace(/\\/g, '/'),
+        type: /\.(mp4)$/i.test(f) ? 'video' : 'image'
+      }))
+    return mediaFiles
   } catch (e) {
     return []
   }
 })
 
-const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
-
-async function ensureRoomStandbyIfInactive() {
+ipcMain.handle('sync-playlist-get', async () => {
   try {
-    const rowIp = db.prepare("SELECT value FROM sys_params WHERE key = 'server_ip'").get()
-    const rowMac = db.prepare("SELECT value FROM sys_params WHERE key = 'client_mac'").get()
-    if (!rowIp || !rowIp.value || !rowMac || !rowMac.value) return
-    let url = rowIp.value
-    if (!/^https?:\/\//.test(url)) url = 'http://' + url
-    url = url + '/rooms/by-mac/' + rowMac.value
-    const res = await fetch(url)
-    if (!res.ok) return
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    const res = await fetch(`http://${server_ip}/playlist?room_id=${room_id}`)
+    if (!res.ok) throw new Error('Failed to fetch playlist')
     const data = await res.json()
-    if (data.status === 'Inactive') {
-      await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'Standby' })
-      })
-    }
-  } catch (e) {
-    // silent
+    return data
+  } catch (err) {
+    console.error('Failed to fetch playlist from server:', err)
+    return []
   }
-}
-
-app.whenReady().then(async () => {
-  // await ensureRoomStandbyIfInactive()
-  createWindow()
 })
 
+// Call Log Management
+ipcMain.handle('make-call', async () => {
+  try {
+    const room_id = getSysParamFromDb('client_room_id')
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!room_id || !server_ip) throw new Error('room_id/server_ip not found')
+
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    const res = await fetch(`http://${server_ip}/call-logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room_id })
+    })
+    if (!res.ok) throw new Error('Failed to create call log')
+    const data = await res.json()
+    return data
+  } catch (err) {
+    console.error('Failed to make call:', err)
+    throw err
+  }
+})
+
+ipcMain.handle('check-call-status', async (_, callId) => {
+  try {
+    const server_ip = getSysParamFromDb('server_ip')
+    if (!server_ip) throw new Error('server_ip not found')
+
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args))
+    const res = await fetch(`http://${server_ip}/call-logs/${callId}`)
+
+    if (!res.ok) throw new Error('Failed to check call status')
+    const data = await res.json()
+    return data
+  } catch (err) {
+    console.error('Failed to check call status:', err)
+    throw err
+  }
+})
+
+//license
+ipcMain.handle('license:isLicensed', () => {
+  return license.isLicensed(basePath)
+})
+
+ipcMain.handle('license:activate', async (event, licenseKey) => {
+  return await license.activateLicense(basePath, licenseKey)
+})
+
+ipcMain.handle('license:getHardwareId', () => {
+  return license.getHardwareId()
+})
+
+// App Lifecycle
+app.whenReady().then(createWindow)
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
-
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })
+
+ipcMain.on('video-is-idle', () => {
+  mainWindow.webContents.send('update-video-idle', true)
+})
+
+ipcMain.on('video-is-active', () => {
+  mainWindow.webContents.send('update-video-idle', false)
+})
+
+ipcMain.on('user-active', () => {
+  // Kirim ke semua window lain yang butuh info ini
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.webContents.send('user-active')
+  })
+})
+
+ipcMain.handle('send-user-active', () => {
+  if (videoWindow) {
+    videoWindow.webContents.send('user-active')
+  }
+})
+
+ipcMain.on('standby', () => {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.webContents.send('user-active')
+  })
+})
+
+ipcMain.handle('send-standby', () => {
+  if (videoWindow) {
+    videoWindow.webContents.send('standby')
+  }
+})
+
+ipcMain.on('active', () => {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.webContents.send('active')
+  })
+})
+
+ipcMain.handle('send-active', () => {
+  if (videoWindow) {
+    videoWindow.webContents.send('active')
+  }
+})
+
+ipcMain.handle('inactive', () => {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.webContents.send('inactive')
+  })
+})
+
+ipcMain.handle('send-inactive', () => {
+  if (videoWindow) {
+    videoWindow.webContents.send('inactive')
+  }
+})
+
+ipcMain.handle('log-to-file', (_, msg) => {
+  logToFile(msg)
+})
+
+function logToFile(msg) {
+  const logFilePath = path.join(storageDir, 'logs.txt')
+  const line = `[${new Date().toISOString()}] ${msg}`
+  try {
+    fs.appendFileSync(logFilePath, line + '\n')
+    return true
+  } catch (err) {
+    console.error('Failed to write to log file:', err)
+    return false
+  }
+}
