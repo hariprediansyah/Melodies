@@ -685,31 +685,35 @@ app.get('/playlist', async (req, res) => {
     res.status(500).json({ success: false, error: err.message })
   }
 })
+
 app.post('/playlist', async (req, res) => {
-  const { room_id, id, title, artist, video_url, is_youtube } = req.body
+  const { room_id, id: songId, title, artist, video_url, is_youtube } = req.body
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
 
-    // 1. Tambahkan ke playlist
+    // id = auto increment per room (posisi), bukan id lagu
+    const [[row]] = await conn.query(
+      `SELECT COALESCE(MAX(CAST(id AS SIGNED)), 0) + 1 AS next_id FROM song_playlist WHERE room_id=?`,
+      [room_id]
+    )
+    const newId = String(row.next_id)
+
+    // video_url = id lagu asli kalau bukan youtube
+    const finalVideoUrl = is_youtube ? `https://www.youtube.com/embed/${songId}` : String(songId)
+
     await conn.query(
       `INSERT INTO song_playlist (room_id, id, title, artist, video_url, is_youtube)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-         title=VALUES(title),
-         artist=VALUES(artist),
-         video_url=VALUES(video_url),
-         is_youtube=VALUES(is_youtube)`,
-      [room_id, id, title, artist, video_url, is_youtube]
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [room_id, newId, title, artist, finalVideoUrl, is_youtube]
     )
 
-    // 2. Jika lagu dari YouTube, tambahkan ke history
     if (is_youtube) {
       await conn.query(
         `INSERT INTO song_youtube_history (room_id, id, title, artist, video_url, is_youtube, play_count)
          VALUES (?, ?, ?, ?, ?, ?, 1)
          ON DUPLICATE KEY UPDATE play_count = play_count + 1`,
-        [room_id, id, title, artist, video_url, is_youtube]
+        [room_id, songId, title, artist, video_url, is_youtube]
       )
     }
 
@@ -756,37 +760,45 @@ app.post('/playlist/swap', async (req, res) => {
 
     await conn.beginTransaction()
 
-    // Get current positions of both songs
-    const [songs] = await conn.query(
-      'SELECT id, title, artist, video_url, is_youtube FROM song_playlist WHERE room_id=? AND id IN (?, ?) ORDER BY id',
-      [room_id, song_id_1, song_id_2]
-    )
+    const [songs] = await conn.query(`SELECT * FROM song_playlist WHERE room_id=? AND id IN (?, ?) FOR UPDATE`, [
+      room_id,
+      song_id_1,
+      song_id_2
+    ])
 
     if (songs.length !== 2) {
       await conn.rollback()
       return res.status(404).json({ success: false, error: 'One or both songs not found in playlist' })
     }
 
-    // Since we can't directly swap in MySQL without knowing the positions,
-    // we'll use a temporary approach by updating one song to have a temporary ID
-    // and then swap the IDs
+    const s1 = songs.find((s) => String(s.id) === String(song_id_1))
+    const s2 = songs.find((s) => String(s.id) === String(song_id_2))
 
-    // First, set one song to a temporary negative ID (to avoid conflicts)
-    const tempId = -Math.abs(song_id_1) // Use negative version of song_id_1 as temp
-    await conn.query('UPDATE song_playlist SET id = ? WHERE room_id = ? AND id = ?', [tempId, room_id, song_id_1])
+    const contentFields = ['title', 'artist', 'video_url', 'is_youtube', 'vocal']
 
-    // Then set the second song to the first song's original ID
-    await conn.query('UPDATE song_playlist SET id = ? WHERE room_id = ? AND id = ?', [song_id_1, room_id, song_id_2])
+    // s1 dapat content s2
+    const setClause1 = contentFields.map((f) => `${f}=?`).join(', ')
+    await conn.query(`UPDATE song_playlist SET ${setClause1} WHERE room_id=? AND id=?`, [
+      ...contentFields.map((f) => s2[f]),
+      room_id,
+      song_id_1
+    ])
 
-    // Finally set the first song (now with temp ID) to the second song's original ID
-    await conn.query('UPDATE song_playlist SET id = ? WHERE room_id = ? AND id = ?', [song_id_2, room_id, tempId])
+    // s2 dapat content s1
+    const setClause2 = contentFields.map((f) => `${f}=?`).join(', ')
+    await conn.query(`UPDATE song_playlist SET ${setClause2} WHERE room_id=? AND id=?`, [
+      ...contentFields.map((f) => s1[f]),
+      room_id,
+      song_id_2
+    ])
 
     await conn.commit()
-    console.log(`Swapped songs ${song_id_1} and ${song_id_2} in room ${room_id}`)
     res.json({ success: true })
   } catch (err) {
-    await conn.rollback()
-    console.log(err)
+    try {
+      await conn.rollback()
+    } catch {}
+    console.error(err)
     res.status(500).json({ success: false, error: err.message })
   } finally {
     conn.release()
@@ -797,91 +809,55 @@ app.post('/playlist/move-to-top', async (req, res) => {
   const { room_id, song_id } = req.body
   const conn = await pool.getConnection()
   try {
-    if (!room_id || !song_id) {
-      return res.status(400).json({ success: false, error: 'room_id and song_id are required' })
-    }
+    if (!room_id || !song_id) return res.status(400).json({ success: false, error: 'room_id and song_id are required' })
 
     await conn.beginTransaction()
 
-    // Kunci target dan ambil ID terkecil (top)
-    const [[songRows], [topRows]] = await Promise.all([
-      conn.query(`SELECT id FROM song_playlist WHERE room_id=? AND id=? FOR UPDATE`, [room_id, song_id]),
-      conn.query(`SELECT id FROM song_playlist WHERE room_id=? ORDER BY CAST(id AS SIGNED) ASC LIMIT 1 FOR UPDATE`, [
-        room_id
-      ])
-    ])
-    if (songRows.length !== 1) {
-      await conn.rollback()
-      return res.status(404).json({ success: false, error: 'Song not found in this room' })
-    }
-    if (topRows.length !== 1) {
+    const [allRows] = await conn.query(
+      `SELECT * FROM song_playlist WHERE room_id=? ORDER BY CAST(id AS SIGNED) ASC FOR UPDATE`,
+      [room_id]
+    )
+
+    if (allRows.length === 0) {
       await conn.rollback()
       return res.status(404).json({ success: false, error: 'Playlist is empty' })
     }
 
-    const curId = songRows[0].id
-    const firstId = topRows[0].id
-    if (curId === firstId) {
+    const curIdx = allRows.findIndex((r) => String(r.id) === String(song_id))
+
+    if (curIdx === -1) {
+      await conn.rollback()
+      return res.status(404).json({ success: false, error: 'Song not found in this room' })
+    }
+
+    if (curIdx <= 1) {
       await conn.commit()
       return res.json({ success: true, moved: false })
     }
 
-    // Ambil segmen [first .. cur] terurut numerik ASC
-    const [segRows] = await conn.query(
-      `SELECT id 
-       FROM song_playlist 
-       WHERE room_id=? 
-         AND CAST(id AS SIGNED) <= CAST(? AS SIGNED)
-       ORDER BY CAST(id AS SIGNED) ASC`,
-      [room_id, curId]
-    )
-    // contoh: seg = [A(=firstId), B, C(=curId)]
-    const seg = segRows.map((r) => r.id)
-    if (seg.length === 0 || seg[0] !== firstId || seg[seg.length - 1] !== curId) {
-      await conn.rollback()
-      return res.status(409).json({ success: false, error: 'Segment detection failed' })
+    // Swap content, id tetap di tempat
+    const contentFields = ['title', 'artist', 'video_url', 'is_youtube']
+    const seg = allRows.slice(1, curIdx + 1)
+    const curContent = seg[seg.length - 1]
+
+    // Geser content ke bawah: seg[i] dapat content seg[i-1]
+    for (let i = seg.length - 1; i > 0; i--) {
+      const setClause = contentFields.map((f) => `${f}=?`).join(', ')
+      const values = contentFields.map((f) => seg[i - 1][f])
+      await conn.query(`UPDATE song_playlist SET ${setClause} WHERE room_id=? AND id=?`, [
+        ...values,
+        room_id,
+        seg[i].id
+      ])
     }
 
-    // 1) Naikkan ke namespace sementara agar tidak bentrok PK
-    // UPDATE ... SET id = CONCAT('__tmp__', id) WHERE id IN (seg)
-    const tmpPrefix = '__tmp__'
-    const placeholders = seg.map(() => '?').join(',')
-    await conn.query(
-      `UPDATE song_playlist 
-       SET id = CONCAT(?, id) 
-       WHERE room_id=? AND id IN (${placeholders})`,
-      [tmpPrefix, room_id, ...seg]
-    )
-
-    // 2) Mapping balik (rotasi):
-    //   cur -> first
-    //   seg[i] -> seg[i+1]  (untuk i dari 0..len-2)
-    // Sumber bernama: '__tmp__'+oldId
-    const cases = []
-    const params = []
-    // cur -> first
-    cases.push(`WHEN ? THEN ?`)
-    params.push(tmpPrefix + curId, String(firstId))
-    // A->B, B->C, ...
-    for (let i = 0; i < seg.length - 1; i++) {
-      const from = tmpPrefix + seg[i]
-      const to = String(seg[i + 1])
-      cases.push(`WHEN ? THEN ?`)
-      params.push(from, to)
-    }
-    // WHERE filter hanya pada sumber tmp
-    const tmpList = seg.map((id) => tmpPrefix + id)
-    const wherePlaceholders = tmpList.map(() => '?').join(',')
-
-    await conn.query(
-      `UPDATE song_playlist 
-       SET id = CASE id ${cases.join(' ')} END
-       WHERE room_id=? AND id IN (${wherePlaceholders})`,
-      [...params, room_id, ...tmpList]
-    )
+    // seg[0] dapat content curRow
+    const setClause = contentFields.map((f) => `${f}=?`).join(', ')
+    const values = contentFields.map((f) => curContent[f])
+    await conn.query(`UPDATE song_playlist SET ${setClause} WHERE room_id=? AND id=?`, [...values, room_id, seg[0].id])
 
     await conn.commit()
-    res.json({ success: true, moved: true, newTopId: String(firstId) })
+    res.json({ success: true, moved: true, newTopId: String(seg[0].id) })
   } catch (err) {
     try {
       await conn.rollback()
@@ -889,7 +865,7 @@ app.post('/playlist/move-to-top', async (req, res) => {
     console.error(err)
     res.status(500).json({ success: false, error: err.message })
   } finally {
-    if (conn) conn.release()
+    conn.release()
   }
 })
 

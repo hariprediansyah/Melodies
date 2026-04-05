@@ -25,7 +25,7 @@ async function activateLicense(baseDir, licenseKey) {
   const LICENSE_FILE = path.join(baseDir, 'licensed.json')
   const hardwareId = getHardwareId()
   // Ganti URL di bawah dengan API kamu
-  const apiUrl = 'http://89.116.110.215:5229/activate-license'
+  const apiUrl = 'https://master.skylerasolutions.com/activate-license'
   try {
     const body = { licenseKey, hardwareId }
     console.log('Activating license with body:', body)

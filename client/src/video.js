@@ -269,11 +269,11 @@ window.electronAPI.onVideoControl((command) => {
 
         const songId = command.id
         // simpen song id ke playedSongId biar gak keputer kalo kecepetan ganti lagu sebelum selesai download
-        playedSongId = songId
+        playedSongId = command.idOriginal
 
         ensureSongDownloaded(songId)
           .then((localPath) => {
-            if (playedSongId !== songId) {
+            if (playedSongId !== command.idOriginal) {
               return
             }
             videoElement.src = `file://${localPath}`

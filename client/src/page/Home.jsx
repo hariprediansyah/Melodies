@@ -97,6 +97,11 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
     if (!selectedSong) return
     if (selectedSong && !playlist.find((p) => p.id == selectedSong.id)) {
       selectedSong.isYoutube = mode === 'youtube'
+      if (mode === 'youtube') {
+        selectedSong.video_url = `https://www.youtube.com/embed/${selectedSong.id}`
+      } else {
+        selectedSong.video_url = selectedSong.id // id file asli disimpan di video_url untuk keperluan pemutaran
+      }
       setPlaylist([...playlist, selectedSong])
       window.electronAPI.syncPlaylistAdd(selectedSong)
       window.electronAPI.youtubeRecommend().then(setYoutubeRecommendations).catch(console.error)
@@ -223,32 +228,39 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
   const playSongAtIndex = useCallback(
     async (index, customPlaylist) => {
       const pl = customPlaylist || playlist
-      console.log('playlist', pl, index)
       if (index < 0 || index >= pl.length) {
         setIsPlaying(false)
         setCurrentSongIndex(-1)
-        // Sembunyikan info lagu selanjutnya jika tidak ada lagu berikutnya
         window.electronAPI.sendVideoControl({ type: 'SET_NEXT_SONG_TITLE', title: '' })
         return
       }
       setCurrentSongIndex(index)
       setIsPlaying(true)
       const song = pl[index]
-      // Kirim info lagu selanjutnya
+
       const nextIndex = (index + 1) % pl.length
       const nextSong = pl[nextIndex]
       window.electronAPI.sendVideoControl({
         type: 'SET_NEXT_SONG_TITLE',
         title: nextSong && pl.length > 1 ? nextSong.title : ''
       })
+
       const storagePath = await window.electronAPI.getStorageBaseDir()
       let videoSrc
       if (song.isYoutube) {
-        videoSrc = `https://www.youtube.com/embed/${song.id}`
+        videoSrc = song.video_url
       } else {
-        videoSrc = `file://${storagePath}/songs/${song.id}/song.mp4`
+        // video_url = id file asli
+        videoSrc = `file://${storagePath}/songs/${song.video_url}/song.mp4`
       }
-      window.electronAPI.sendVideoControl({ type: 'LOAD', src: videoSrc, isYoutube: !!song.isYoutube, id: song.id })
+
+      window.electronAPI.sendVideoControl({
+        type: 'LOAD',
+        src: videoSrc,
+        isYoutube: !!song.isYoutube,
+        id: song.video_url,
+        idOriginal: song.id // id file asli untuk keperluan lain
+      })
     },
     [playlist]
   )
@@ -292,10 +304,10 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
       return
     }
 
-    const currentIndex = playlist.findIndex((song) => song.id === selectedSong.id)
+    const currentIndex = playlist.findIndex((song) => String(song.id) === String(selectedSong.id))
 
     // Skip if already at the top
-    if (currentIndex <= 0) {
+    if (currentIndex <= 1) {
       return
     }
 
@@ -305,15 +317,21 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
       // Sync to server FIRST to ensure server state is updated before local state
       await window.electronAPI.syncPlaylistMoveToTop(selectedSong.id)
       const newPlaylist = await fetchPlaylistFromServer()
-      const movedSong = newPlaylist[0]
 
-      setSelectedSong(movedSong) // Keep the same song selected (now at new position)
+      setPlaylist(newPlaylist) // Update local playlist with server response
 
-      // Scroll to the top
+      // Find the moved song by ID (it should now be at position 2 / index 1)
+      const movedSong = newPlaylist.find((s) => String(s.id) === String(selectedSong.id)) || newPlaylist[1]
+
+      if (movedSong) {
+        setSelectedSong(movedSong) // Keep the same song selected (now at new position)
+      }
+
+      // Scroll to position 2
       if (playlistScrollRef.current) {
         const songElements = playlistScrollRef.current.children
-        if (songElements.length > 0) {
-          songElements[0].scrollIntoView({ behavior: 'smooth', block: 'start' })
+        if (songElements.length > 1) {
+          songElements[1].scrollIntoView({ behavior: 'smooth', block: 'start' })
         }
       }
     } catch (error) {
@@ -344,7 +362,6 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
     try {
       // Sync to server FIRST to ensure server state is updated before local state
       await window.electronAPI.syncPlaylistSwap(songToMove.id, songAbove.id)
-      ;[songAbove.id, songToMove.id] = [songToMove.id, songAbove.id]
 
       // Update local state only after server confirms success
       const newPlaylist = [...playlist]
@@ -391,7 +408,6 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
     try {
       // Sync to server FIRST to ensure server state is updated before local state
       await window.electronAPI.syncPlaylistSwap(songToMove.id, songBelow.id)
-      ;[songBelow.id, songToMove.id] = [songToMove.id, songBelow.id]
 
       // Update local state only after server confirms success
       const newPlaylist = [...playlist]
@@ -483,7 +499,10 @@ export default function Home({ onBankMusic, searchQuery, setSearchQuery, setQuer
             playlist={playlist}
             onSelectSong={setSelectedSong}
             selectedSong={selectedSong}
-            onPlaySong={(song) => playSongAtIndex(playlist.indexOf(song))}
+            onPlaySong={(song) => {
+              const index = playlist.findIndex((s) => String(s.id) === String(song.id))
+              playSongAtIndex(index)
+            }}
             currentSong={currentSong}
           />
           <div className='row-span-2 flex justify-between gap-1 mt-4 text-2xl'>
